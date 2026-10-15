@@ -1,4 +1,5 @@
 #include "vk_context.h"
+#include "platform.h"
 #include <windows.h>
 #include <cstdio>
 #include <cstring>
@@ -11,13 +12,8 @@
 // ---------------------------------------------------------------------------
 namespace {
 std::mutex g_logMutex;
-std::wstring logPath() {
-    wchar_t buf[MAX_PATH];
-    DWORD n = GetModuleFileNameW(nullptr, buf, MAX_PATH);
-    std::wstring p(buf, n);
-    size_t s = p.find_last_of(L"\\/");
-    if (s != std::wstring::npos) p = p.substr(0, s + 1);
-    return p + L"gigatracer.log";
+std::filesystem::path logPath() {
+    return platform::exeDir() / "gigatracer.log";
 }
 } // namespace
 

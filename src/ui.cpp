@@ -9,8 +9,9 @@
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_vulkan.h>
 
+#include "platform.h"
+
 #include <windows.h>
-#include <shobjidl.h>
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -19,8 +20,11 @@
 // Small helpers
 // ---------------------------------------------------------------------------
 namespace {
-void messageBox(const char* text, const char* title, UINT icon) {
-    MessageBoxA(nullptr, text, title, MB_OK | icon);
+constexpr auto MsgError   = platform::MessageKind::Error;
+constexpr auto MsgWarning = platform::MessageKind::Warning;
+
+void messageBox(const char* text, const char* title, platform::MessageKind kind) {
+    platform::showMessage(kind, text, title);
 }
 
 std::string wideToUtf8(const std::wstring& w) {
@@ -35,85 +39,17 @@ PFN_vkVoidFunction imguiLoader(const char* name, void* user) {
     return vkGetInstanceProcAddr((VkInstance)user, name);
 }
 
-// Native open dialog for OBJ; returns empty on cancel.
-std::wstring openObjDialog() {
-    std::wstring result;
-    IFileOpenDialog* dlg = nullptr;
-    if (FAILED(CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER,
-                                IID_PPV_ARGS(&dlg)))) return result;
-    COMDLG_FILTERSPEC types[] = { { L"Wavefront OBJ", L"*.obj" }, { L"All files", L"*.*" } };
-    dlg->SetFileTypes(2, types);
-    if (SUCCEEDED(dlg->Show(nullptr))) {
-        IShellItem* item = nullptr;
-        if (SUCCEEDED(dlg->GetResult(&item))) {
-            PWSTR path = nullptr;
-            if (SUCCEEDED(item->GetDisplayName(SIGDN_FILESYSPATH, &path))) {
-                result = path;
-                CoTaskMemFree(path);
-            }
-            item->Release();
-        }
-    }
-    dlg->Release();
-    return result;
-}
-
-std::wstring saveFileDialog(const wchar_t* ext, const wchar_t* desc, const wchar_t* pattern) {
-    std::wstring result;
-    IFileSaveDialog* dlg = nullptr;
-    if (FAILED(CoCreateInstance(CLSID_FileSaveDialog, nullptr, CLSCTX_INPROC_SERVER,
-                                IID_PPV_ARGS(&dlg)))) return result;
-    COMDLG_FILTERSPEC type[] = { { desc, pattern } };
-    dlg->SetFileTypes(1, type);
-    dlg->SetDefaultExtension(ext);
-    if (SUCCEEDED(dlg->Show(nullptr))) {
-        IShellItem* item = nullptr;
-        if (SUCCEEDED(dlg->GetResult(&item))) {
-            PWSTR path = nullptr;
-            if (SUCCEEDED(item->GetDisplayName(SIGDN_FILESYSPATH, &path))) {
-                result = path;
-                CoTaskMemFree(path);
-            }
-            item->Release();
-        }
-    }
-    dlg->Release();
-    return result;
-}
-
-std::wstring pickFolderDialog() {
-    std::wstring result;
-    IFileOpenDialog* dlg = nullptr;
-    if (FAILED(CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER,
-                                IID_PPV_ARGS(&dlg)))) return result;
-    DWORD opts = 0;
-    dlg->GetOptions(&opts);
-    dlg->SetOptions(opts | FOS_PICKFOLDERS);
-    if (SUCCEEDED(dlg->Show(nullptr))) {
-        IShellItem* item = nullptr;
-        if (SUCCEEDED(dlg->GetResult(&item))) {
-            PWSTR path = nullptr;
-            if (SUCCEEDED(item->GetDisplayName(SIGDN_FILESYSPATH, &path))) {
-                result = path;
-                CoTaskMemFree(path);
-            }
-            item->Release();
-        }
-    }
-    dlg->Release();
-    return result;
-}
 } // namespace
 
 // ---------------------------------------------------------------------------
 // Window
 // ---------------------------------------------------------------------------
 bool App::initWindow() {
-    if (!glfwInit()) { messageBox("Failed to initialize GLFW.", "VkGigaTracer", MB_ICONERROR); return false; }
+    if (!glfwInit()) { messageBox("Failed to initialize GLFW.", "VkGigaTracer", MsgError); return false; }
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     if (headless_) glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
     window_ = glfwCreateWindow(1440, 900, "VkGigaTracer", nullptr, nullptr);
-    if (!window_) { messageBox("Failed to create a window.", "VkGigaTracer", MB_ICONERROR); return false; }
+    if (!window_) { messageBox("Failed to create a window.", "VkGigaTracer", MsgError); return false; }
     return true;
 }
 
@@ -129,20 +65,20 @@ bool App::initVulkan() {
     if (!ctx_.initInstance(validation)) {
         messageBox("A Vulkan-capable GPU driver is required to run VkGigaTracer.\n"
                    "vulkan-1.dll could not be loaded or no Vulkan instance could be created.",
-                   "VkGigaTracer", MB_ICONERROR);
+                   "VkGigaTracer", MsgError);
         return false;
     }
     vkLog("initVulkan: instance ok");
     glfwInitVulkanLoader((PFN_vkGetInstanceProcAddr)vkGetInstanceProcAddr);
 
     if (glfwCreateWindowSurface(ctx_.instance(), window_, nullptr, &surface_) != VK_SUCCESS) {
-        messageBox("Failed to create a window surface.", "VkGigaTracer", MB_ICONERROR);
+        messageBox("Failed to create a window surface.", "VkGigaTracer", MsgError);
         return false;
     }
     vkLog("initVulkan: surface ok");
     if (!ctx_.createDevice(surface_)) {
         messageBox("No suitable Vulkan device was found (needs present + compute).",
-                   "VkGigaTracer", MB_ICONERROR);
+                   "VkGigaTracer", MsgError);
         return false;
     }
     vkLog("initVulkan: device ok");
@@ -337,7 +273,7 @@ bool App::initImGui() {
     info.ImageCount = (uint32_t)scImages_.size();
     info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
     if (!ImGui_ImplVulkan_Init(&info)) {
-        messageBox("Failed to initialize the ImGui Vulkan backend.", "VkGigaTracer", MB_ICONERROR);
+        messageBox("Failed to initialize the ImGui Vulkan backend.", "VkGigaTracer", MsgError);
         return false;
     }
     return true;
@@ -362,7 +298,8 @@ void App::loadDemoScene() {
 }
 
 void App::loadObjDialog() {
-    std::wstring path = openObjDialog();
+    std::wstring path = platform::openFileDialog({ { "Wavefront OBJ", "*.obj" },
+                                                   { "All files", "*.*" } });
     if (path.empty()) return;
     ObjLoadResult res = loadObj(path);
     if (!res.ok) {
@@ -394,7 +331,7 @@ void App::startFinalRender() {
         std::snprintf(buf, sizeof(buf),
             "This render needs about %.1f GB of free scratch space.\n"
             "Free up space or choose a different scratch drive in Advanced settings.", gb);
-        messageBox(buf, "VkGigaTracer - Disk Space", MB_ICONWARNING);
+        messageBox(buf, "VkGigaTracer - Disk Space", MsgWarning);
         statusLine_ = "Render not started: insufficient scratch disk space.";
         return;
     }
@@ -407,13 +344,13 @@ void App::startFinalRender() {
 // Save
 // ---------------------------------------------------------------------------
 void App::startSave(SaveFormat fmt) {
-    const wchar_t* ext; const wchar_t* desc; const wchar_t* pat;
+    const char* ext; const char* desc; const char* pat;
     switch (fmt) {
-        case SaveFormat::PNG:  ext = L"png"; desc = L"PNG image"; pat = L"*.png"; break;
-        case SaveFormat::JPEG: ext = L"jpg"; desc = L"JPEG image"; pat = L"*.jpg"; break;
-        default:               ext = L"ppm"; desc = L"Portable Pixmap"; pat = L"*.ppm"; break;
+        case SaveFormat::PNG:  ext = "png"; desc = "PNG image"; pat = "*.png"; break;
+        case SaveFormat::JPEG: ext = "jpg"; desc = "JPEG image"; pat = "*.jpg"; break;
+        default:               ext = "ppm"; desc = "Portable Pixmap"; pat = "*.ppm"; break;
     }
-    std::wstring path = saveFileDialog(ext, desc, pat);
+    std::wstring path = platform::saveFileDialog({ desc, pat }, ext);
     if (path.empty()) return;
 
     if (saveThread_.joinable()) saveThread_.join();
@@ -542,7 +479,7 @@ void App::drawSidebar() {
         ImGui::TextWrapped("Scratch: %s", sf.c_str());
         ImGui::PopStyleColor();
         if (theme::SecondaryButton("Choose scratch folder...", ImVec2(-FLT_MIN, 0))) {
-            std::wstring f = pickFolderDialog();
+            std::wstring f = platform::pickFolderDialog();
             if (!f.empty()) settings_.scratchFolder = f;
         }
     }

@@ -314,6 +314,13 @@ set(APP_SOURCES
     src/theme.cpp
     src/ui.cpp)
 
+# OS-specific implementations of src/platform.h.
+if(WIN32)
+    list(APPEND APP_SOURCES src/platform_win32.cpp)
+else()
+    list(APPEND APP_SOURCES src/platform_posix.cpp)
+endif()
+
 add_executable(VkGigaTracer WIN32 ${APP_SOURCES})
 add_dependencies(VkGigaTracer shaders jpegturbo_ext)
 
@@ -386,6 +393,7 @@ if(VKGT_BUILD_TESTS)
         tests/test_scene.cpp
         tests/test_bvh.cpp
         tests/test_gpu_layout.cpp
+        tests/test_platform.cpp
         src/mmap_image.cpp
         src/savers.cpp
         src/obj_loader.cpp
@@ -401,7 +409,13 @@ if(VKGT_BUILD_TESTS)
     target_compile_definitions(VkGigaTracerTests PRIVATE
         VKGT_TEST_DATA_DIR="${CMAKE_SOURCE_DIR}/tests/data"
         DOCTEST_CONFIG_USE_STD_HEADERS)  # avoid std:: forward decls (MSVC C5285)
-    target_link_libraries(VkGigaTracerTests PRIVATE png_static zlibstatic jpegturbo)
+    target_link_libraries(VkGigaTracerTests PRIVATE png_static zlibstatic jpegturbo Threads::Threads)
+    if(WIN32)
+        target_sources(VkGigaTracerTests PRIVATE src/platform_win32.cpp)
+        target_link_libraries(VkGigaTracerTests PRIVATE Ole32 Shell32)
+    else()
+        target_sources(VkGigaTracerTests PRIVATE src/platform_posix.cpp)
+    endif()
 
     include(${doctest_SOURCE_DIR}/scripts/cmake/doctest.cmake)
     doctest_discover_tests(VkGigaTracerTests)

@@ -1,28 +1,35 @@
-// main.cpp - entry point. Sets Per-Monitor-V2 DPI awareness, initializes COM
-// for the native file dialogs, and runs the application. All Vulkan loading is
-// dynamic via volk; if vulkan-1.dll or a device is missing the App shows one
-// friendly message box and exits cleanly.
+// main.cpp - entry point. Performs per-process OS setup (DPI awareness and COM
+// on Windows), parses --selftest, and runs the application. All Vulkan
+// loading is dynamic via volk; if the Vulkan loader or a device is missing the
+// App shows one friendly message box and exits cleanly.
 #include "ui.h"
-#include <windows.h>
-#include <objbase.h>
+#include "platform.h"
+#include <cstring>
 
-int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
-    // Per-Monitor-V2 DPI awareness so the UI is crisp on high-DPI displays.
-    SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
-
-    // COM for IFileDialog (open/save/folder pickers).
-    HRESULT hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
-    bool comReady = SUCCEEDED(hr);
+namespace {
+int appMain(int argc, char** argv) {
+    platform::initProcess();
 
     bool selftest = false;
+    for (int i = 1; i < argc; ++i)
+        if (argv[i] && std::strcmp(argv[i], "--selftest") == 0) selftest = true;
+
+    int rc;
     {
-        LPWSTR cmd = GetCommandLineW();
-        if (cmd && wcsstr(cmd, L"--selftest")) selftest = true;
+        App app;
+        rc = selftest ? app.runSelfTest() : app.run();
     }
 
-    App app;
-    int rc = selftest ? app.runSelfTest() : app.run();
-
-    if (comReady) CoUninitialize();
+    platform::shutdownProcess();
     return rc;
 }
+} // namespace
+
+int main(int argc, char** argv) { return appMain(argc, argv); }
+
+#ifdef _WIN32
+// The Windows build is a GUI-subsystem exe (no console), whose entry is WinMain.
+#include <windows.h>
+#include <cstdlib>
+int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) { return appMain(__argc, __argv); }
+#endif

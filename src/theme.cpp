@@ -3,7 +3,7 @@
 #include <cstdio>
 #include <cstring>
 #include <string>
-#include <windows.h>   // GetModuleFileNameA, to resolve the bundled fonts/ dir
+#include "platform.h"  // exeDir(), to resolve the bundled fonts/ dir
 
 namespace theme {
 namespace {
@@ -91,25 +91,15 @@ ImFont* tryLoadTTF(ImGuiIO& io, const char* path, float sizePx) {
     return io.Fonts->AddFontFromFileTTF(path, sizePx, &cfg);
 }
 
-// Directory the running .exe lives in, with a trailing separator. The build
-// copies fonts/ next to the executable, so this resolves the bundled Roboto
-// regardless of the current working directory.
-std::string exeDir() {
-    char buf[MAX_PATH] = {};
-    DWORD n = GetModuleFileNameA(nullptr, buf, (DWORD)sizeof(buf));
-    std::string p(buf, n ? n : 0);
-    size_t slash = p.find_last_of("\\/");
-    return (slash == std::string::npos) ? std::string() : p.substr(0, slash + 1);
-}
-
-// Try the bundled Roboto first (next to the exe, then the cwd), then fall back
-// to the requested Windows system font. Returns nullptr only if everything is
-// missing.
+// Try the bundled Roboto first (fonts/ next to the executable, where the build
+// copies it, then the cwd), then fall back to the requested system font.
+// Returns nullptr only if everything is missing.
 ImFont* loadUiFont(ImGuiIO& io, const char* robotoFile, const char* sysFont,
                    float sizePx) {
-    std::string dir = exeDir();
+    std::filesystem::path dir = platform::exeDir();
     if (!dir.empty()) {
-        if (ImFont* f = tryLoadTTF(io, (dir + "fonts\\" + robotoFile).c_str(), sizePx))
+        std::string bundled = platform::toUtf8(dir / "fonts" / robotoFile);
+        if (ImFont* f = tryLoadTTF(io, bundled.c_str(), sizePx))
             return f;
     }
     if (ImFont* f = tryLoadTTF(io, (std::string("fonts/") + robotoFile).c_str(), sizePx))
