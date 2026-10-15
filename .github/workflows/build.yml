@@ -1,0 +1,101 @@
+# Build, test and package VkGigaTracer on Linux and Windows.
+#
+# Linux builds inside an ubuntu:22.04 container: a Linux binary only runs on
+# systems whose glibc is at least as new as the build machine's, so building
+# on 22.04 keeps the release tarball working on Ubuntu 22.04 and newer.
+# Mesa's lavapipe (a CPU Vulkan driver) plus Xvfb let the GPU self-test run
+# without a GPU or a display. Windows runners have no Vulkan driver, so only
+# the CPU unit tests run there.
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    name: Linux (Ubuntu 22.04)
+    runs-on: ubuntu-latest
+    container: ubuntu:22.04
+    steps:
+      - name: Install build tools
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            build-essential ninja-build pkg-config git ca-certificates \
+            python3 python3-pip xorg-dev libxkbcommon-dev \
+            libvulkan1 mesa-vulkan-drivers xvfb xauth
+          # Ubuntu 22.04 ships CMake 3.22; the project needs 3.24+.
+          python3 -m pip install --no-cache-dir cmake
+
+      - uses: actions/checkout@v4
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: _deps_linux
+          key: deps-linux-${{ hashFiles('CMakeLists.txt', 'cmake/**') }}
+
+      - name: Configure
+        run: >
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          -DFETCHCONTENT_BASE_DIR="$GITHUB_WORKSPACE/_deps_linux"
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Unit tests
+        run: ctest --test-dir build -LE gpu --output-on-failure
+
+      - name: GPU tests (self-test + golden image, lavapipe under Xvfb)
+        run: xvfb-run -a ctest --test-dir build -L gpu --output-on-failure
+
+      - name: Package
+        run: cd build && cpack
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VkGigaTracer-linux-x86_64
+          path: build/VkGigaTracer-*-linux-x86_64.tar.gz
+          if-no-files-found: error
+
+  windows:
+    name: Windows (x64)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: _deps_cache
+          key: deps-windows-${{ hashFiles('CMakeLists.txt', 'cmake/**') }}
+
+      - name: Configure
+        run: cmake -S . -B build -A x64
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      - name: Unit tests
+        run: ctest --test-dir build -C Release -LE gpu --output-on-failure
+
+      - name: Package
+        run: |
+          cd build
+          cpack -C Release
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VkGigaTracer-windows-x64
+          path: build/VkGigaTracer-*-windows-x64.zip
+          if-no-files-found: error
