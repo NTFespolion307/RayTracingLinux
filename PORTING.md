@@ -1,10 +1,12 @@
 # Porting VkGigaTracer to Linux
 
-Status: plan approved 2026-10-15. **Steps 1–11 done.**
-- Windows: builds, 42/42 tests pass.
-- Linux (WSL distro `RayTracing`, **Ubuntu 22.04**, GCC 11.4): builds, 40/40 unit tests + 2/2 GPU tests pass under Xvfb with Mesa lavapipe (compute path), and the GUI starts. The binary needs only libc/libm, at most **GLIBC_2.34**.
-- Also verified earlier on Ubuntu 26.04 / GCC 15, where lavapipe exposes `VK_KHR_ray_query`: the hardware ray-query backend ran for the first time and matched the Windows compute-path reference (MAE 0.000).
-- Still to do on Linux: native file dialogs and message boxes (step 12; they currently act as "cancelled" / print to stderr), then steps 13–17.
+Status: plan approved 2026-10-15. **All 17 steps done.** Remaining: a manual click-through of the Linux file dialogs (see below).
+- Windows: builds, 45/45 tests pass; release zip self-tests from a fresh extract.
+- Linux (WSL distro `RayTracing`, **Ubuntu 22.04**, GCC 11.4): builds, 43/43 unit tests + 2/2 GPU tests pass under Xvfb with Mesa lavapipe (compute path), and the GUI starts. The binary needs only libc/libm, at most **GLIBC_2.34**. The release tarball self-tests from a fresh extract.
+- Also verified on Ubuntu 26.04 / GCC 15, where lavapipe exposes `VK_KHR_ray_query`: the hardware ray-query backend ran for the first time and matched the Windows compute-path reference (MAE 0.000).
+- Linux dialogs (step 12): each one was checked to launch `zenity` with the right mode and filters, and cancelling returns nothing. Not yet checked by a person: actually picking a file/folder in each dialog, and the typed-path fallback when no dialog program is installed.
+- CI: `.github/workflows/build.yml` builds, tests and packages on Ubuntu 22.04 (container) and Windows on every push.
+- Deferred by decision: Wayland-native support (V4 HiDPI rework), see §7 Q1.
 
 Build host note: the target is now **Ubuntu 22.04 and newer** (decided 2026-10-15). A Linux binary runs only on systems whose glibc is at least as new as the build machine's, so releases are built on 22.04 (glibc 2.35). The `RayTracing` WSL distro was recreated as 22.04 for this, and serves as both development and release build host.
 

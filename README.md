@@ -1,30 +1,51 @@
 # VkGigaTracer
 
-A portable Windows desktop **offline GPU path tracer** that renders 3D scenes
-into 2D images at resolutions up to **80K (76,800 × 43,200 ≈ 3.32 gigapixels)**
-on ordinary consumer hardware — including 4 GB GPUs and Vulkan-capable iGPUs —
-**without ever failing for memory or size reasons.**
+A portable desktop **offline GPU path tracer** for **Windows and Linux** that
+renders 3D scenes into 2D images at resolutions up to **80K (76,800 × 43,200 ≈
+3.32 gigapixels)** on ordinary consumer hardware — including 4 GB GPUs and
+Vulkan-capable iGPUs — **without ever failing for memory or size reasons.**
 
-All GPU work is done through **Vulkan only** (via dynamic loading with volk). The
-build produces a **single self-contained `VkGigaTracer.exe`** that runs on a clean
-Windows machine whose only relevant software is a GPU driver.
+All GPU work is done through **Vulkan only** (via dynamic loading with volk).
+Each platform gets a **single self-contained executable** (`VkGigaTracer.exe` on
+Windows, `VkGigaTracer` on Linux) that runs on a clean machine whose only
+relevant software is a GPU driver.
 
-> **Linux port in progress.** The code base is being made to build and run
-> natively on Linux (Ubuntu 22.04 and newer, X11) while staying fully working on Windows.
-> All OS-specific code now sits behind a small platform layer, and a test suite
-> locks in current behavior. The Linux build compiles, passes the full test
-> suite (including the rendered-image check) and opens the UI; native file
-> dialogs on Linux are still missing, so OBJ loading and saving only work on
-> Windows for now. The plan, decisions and progress are tracked in
-> [PORTING.md](PORTING.md).
+How the Linux port was done (analysis, decisions, step-by-step plan) is
+recorded in [PORTING.md](PORTING.md).
+
+---
+
+## Download
+
+Every push to `main` is built and tested by GitHub Actions on both platforms.
+The packages are attached to each run of the
+[build workflow](../../actions/workflows/build.yml) as artifacts:
+
+- `VkGigaTracer-<version>-windows-x64.zip`
+- `VkGigaTracer-<version>-linux-x86_64.tar.gz`
+
+Each contains the executable, `fonts/`, this README and the license in one
+folder. Extract it anywhere and run the executable from there; nothing is
+installed.
 
 ---
 
 ## System requirements (to run)
 
-- Windows 10/11, x64.
-- Any **Vulkan 1.1** capable GPU + driver (roughly 2016 or newer). Drivers ship
-  `vulkan-1.dll`; no Vulkan SDK or runtime is required.
+- **Windows:** Windows 10/11, x64.
+- **Linux:** x86_64 with glibc 2.34 or newer: **Ubuntu 22.04+**, Debian 12+,
+  Fedora 35+, RHEL 9 and derivatives. Runs in an X11 session, or on Wayland
+  desktops through XWayland (enabled by default on GNOME and KDE).
+- Any **Vulkan 1.1** capable GPU + driver (roughly 2016 or newer). No Vulkan SDK
+  or runtime is required.
+  - Windows drivers ship `vulkan-1.dll`.
+  - On Linux the loader is `libvulkan.so.1` (`libvulkan1` on Ubuntu/Debian),
+    plus the GPU's Vulkan driver: Mesa (`mesa-vulkan-drivers`) for AMD and
+    Intel, or NVIDIA's proprietary driver. Both are installed by default on
+    most desktop distributions.
+- **Linux file dialogs** use `zenity` (GNOME) or `kdialog` (KDE), which desktop
+  distributions normally include. Without either, the app asks you to type the
+  path instead.
 - **Hardware ray tracing is used automatically** when the GPU supports
   `VK_KHR_ray_query` (NVIDIA RTX, AMD RX 6000+, Intel Arc). Otherwise a
   compute-only BVH path tracer is used, so ~2016-era GPUs and iGPUs still work.
@@ -39,15 +60,16 @@ Windows machine whose only relevant software is a GPU driver.
   system temp folder is used instead. You can pick any other folder under
   **Performance → Choose scratch folder…**.
 
-The exe imports only standard Windows system DLLs (`KERNEL32`, `USER32`,
-`GDI32`, `IMM32`, `OLE32`, `SHELL32`). The MSVC runtime is statically linked,
-Vulkan is loaded dynamically at runtime, and all SPIR-V shaders are embedded in
-the binary. The only companion files are the optional UI fonts in `fonts/`
-(see below).
+The Windows exe imports only standard Windows system DLLs (`KERNEL32`,
+`USER32`, `GDI32`, `IMM32`, `OLE32`, `SHELL32`). The Linux binary links only
+`libc` and `libm`; the C++ runtime is linked in statically, and the X11
+libraries are loaded at runtime by GLFW. On both, Vulkan is loaded dynamically
+at runtime and all SPIR-V shaders are embedded in the binary. The only
+companion files are the optional UI fonts in `fonts/` (see below).
 
 ---
 
-## Build requirements
+## Building on Windows
 
 - **Visual Studio 2022 or newer** (verified with the VS 2026 / v18 build tools).
 - **CMake ≥ 3.24.**
@@ -76,13 +98,67 @@ Run each command from the repository root.
    ```bat
    ctest --test-dir build -C Release --output-on-failure
    ```
-   Success: `100% tests passed, 0 tests failed out of 41`.
+   Success: `100% tests passed, 0 tests failed out of 45`.
+4. Make the release zip (optional):
+   ```bat
+   cd build && cpack -C Release
+   ```
+   Success: `build/VkGigaTracer-1.0.0-windows-x64.zip` is created.
 
 The first configure downloads and builds every dependency, so it takes a few
 minutes; later builds are incremental.
 
+## Building on Linux
+
+Verified on Ubuntu 22.04 with GCC 11.4 and on Ubuntu 26.04 with GCC 15. Build
+on the oldest distribution you want to support: the binary runs on systems whose
+glibc is at least as new as the build machine's.
+
+Run each command in a terminal, from the repository root.
+
+1. Install the build tools and X11 headers:
+   ```sh
+   sudo apt install build-essential ninja-build pkg-config python3-pip xorg-dev libxkbcommon-dev
+   ```
+   Success: the command ends without `E:` errors.
+2. Install a current CMake (Ubuntu 22.04's packaged CMake is 3.22; the project needs 3.24+; skip this on newer distributions):
+   ```sh
+   python3 -m pip install --user cmake
+   ```
+   Success: `cmake --version` prints 3.24 or newer (log out and back in if `cmake` is not found yet).
+3. Configure:
+   ```sh
+   cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+   ```
+   Success: the last line is `-- Build files have been written to: …/build`.
+4. Build:
+   ```sh
+   cmake --build build
+   ```
+   Success: `build/VkGigaTracer` exists, with a `fonts` folder next to it.
+5. Run the unit tests (optional):
+   ```sh
+   ctest --test-dir build -LE gpu --output-on-failure
+   ```
+   Success: `100% tests passed out of 43`.
+6. Run the GPU tests (optional; needs a Vulkan driver, and `xvfb` if there is no display):
+   ```sh
+   xvfb-run -a ctest --test-dir build -L gpu --output-on-failure
+   ```
+   Success: `100% tests passed out of 2`.
+7. Make the release tarball (optional):
+   ```sh
+   cd build && cpack
+   ```
+   Success: `build/VkGigaTracer-1.0.0-linux-x86_64.tar.gz` is created.
+
+On Linux the system `python3` runs glslang's code generators, and GLFW is built
+for X11 only.
+
+## Dependencies
+
 All third-party libraries are pulled with `FetchContent` at pinned release tags
-and built from source, statically linked:
+(or a pinned commit) and built from source, statically linked:
 
 | Dependency | Tag | Role |
 |---|---|---|
@@ -96,17 +172,19 @@ and built from source, statically linked:
 | zlib | v1.3.1 | PNG compression |
 | libpng | v1.6.44 | streaming PNG encode |
 | libjpeg-turbo | 3.0.4 | streaming JPEG encode (SIMD off, no NASM) |
+| portable-file-dialogs | commit c12ea8c | native file dialogs + message boxes (Linux only) |
 | doctest | v2.4.11 | unit tests only (not linked into the app) |
 
 The two SPIR-V variants of the path tracer are compiled at build time by
 glslang and embedded into the executable as `constexpr` byte arrays
 (`cmake/embed_spirv.cmake`), so no shader files are needed at runtime. The UI
 fonts (Roboto) are copied into `fonts/` next to the exe after every build; if
-they are missing the app falls back to Segoe UI, then ImGui's built-in font.
+they are missing the app falls back to a system font (Segoe UI on Windows;
+DejaVu, Liberation or Noto Sans on Linux), then ImGui's built-in font.
 
 ### Running the tests
 
-The build also produces a test suite, run through CTest (step 3 above):
+The build also produces a test suite, run through CTest (see the build steps):
 
 - **`VkGigaTracerTests`**: CPU-only unit tests (doctest) for the render option
   tables, the disk-backed image and scratch-folder selection, the PNG / JPEG /
@@ -120,9 +198,15 @@ The build also produces a test suite, run through CTest (step 3 above):
   and small GPU-to-GPU differences pass, while real changes in brightness,
   color or geometry fail.
 
-On a machine without a Vulkan GPU (e.g. a CI server), skip the GPU tests with
-`ctest --test-dir build -C Release -LE gpu`. Building with
+On a machine without a Vulkan GPU, skip the GPU tests with `-LE gpu`, or on
+Linux run them on Mesa's CPU Vulkan driver (lavapipe, part of
+`mesa-vulkan-drivers`) under `xvfb-run`, which is what CI does. Building with
 `-DVKGT_BUILD_TESTS=OFF` leaves the test targets out entirely.
+
+CI (`.github/workflows/build.yml`) runs on every push: the Linux job builds in
+an Ubuntu 22.04 container and runs all tests including the self-test; the
+Windows job builds without a Vulkan SDK and runs the unit tests. Both publish
+their package.
 
 ---
 
@@ -192,11 +276,14 @@ in VRAM, not in system RAM.
 
 1. **Disk-backed image.** At render start the app creates a scratch file of
    `width × height × 4` bytes (RGBA8) in the scratch folder (by default `temp/`
-   next to the exe) and maps it with a single 64-bit `MapViewOfFile`. The
-   renderer writes finished pixels straight into this mapping. The image's size
-   is therefore bounded only by free disk space; 80K is ≈ 12.4 GiB on disk and a
-   few hundred MB of committed host RAM. (`src/mmap_image.{h,cpp}` for folder
-   selection and free-space checks, `src/mmap_image_win32.cpp` for the mapping)
+   next to the exe) and maps it with a single 64-bit mapping (`MapViewOfFile`
+   on Windows, `mmap` on Linux). The renderer writes finished pixels straight
+   into this mapping. The image's size is therefore bounded only by free disk
+   space; 80K is ≈ 12.4 GiB on disk and a few hundred MB of committed host RAM.
+   On Linux the file's blocks are reserved up front with `posix_fallocate`, so
+   a disk that fills up mid-render can't crash the app through the mapping.
+   (`src/mmap_image.{h,cpp}` for folder selection and free-space checks,
+   `src/mmap_image_win32.cpp` / `src/mmap_image_posix.cpp` for the mapping)
 
 2. **Tiles.** The image is split into tiles (default 256×256). The GPU holds a
    **single** RGBA32F accumulation tile (≈ 1–4 MiB) plus small staging — GPU
@@ -205,8 +292,9 @@ in VRAM, not in system RAM.
    read back, and written into the mapped file, then box-downsampled into a small
    preview. (`src/renderer.{h,cpp}`)
 
-3. **TDR safety.** Windows resets the GPU after ~2 s of unyielding work. Every
-   submit targets ≈100 ms: the spp-per-batch is auto-tuned from measured submit
+3. **GPU watchdog safety.** Windows resets the GPU after ~2 s of unyielding
+   work (TDR), and Linux drivers have similar hang watchdogs. Every submit
+   targets ≈100 ms: the spp-per-batch is auto-tuned from measured submit
    times, and if even 1 spp on a tile is too slow (huge bounce counts on a weak
    iGPU) the tile is subdivided down to 128² or 64². One submit → one fence wait
    → yield; work is never chained unbounded.
@@ -261,7 +349,7 @@ auto-enabled so renders are never black.
 
 ## Verification
 
-Running `VkGigaTracer.exe --selftest` performs a headless (hidden-window)
+Running `VkGigaTracer --selftest` performs a headless (hidden-window)
 render of the demo scene at 1080p / 16 spp / 16 bounces, writes
 `selftest_out.ppm` to the **current working directory**, and logs progress to
 `gigatracer.log` next to the exe. This is how the render path is validated
@@ -274,11 +362,15 @@ correct, physically-plausible image (red/green walls, color bleeding, sky) in
 ~12 s and saves a 5.9 MB PPM. Two runs on the same GPU produce bit-identical
 images. The Debug build (which enables the Khronos validation layer when it is
 installed) runs both the self-test and the interactive UI, including window
-resizes, with **zero validation messages**. The hardware ray-query backend
-compiles and is selected automatically on capable GPUs; it was not
-runtime-exercised on this machine (the test iGPU exposes no `VK_KHR_ray_query`),
-but it shares 95% of its code with the verified compute path and falls back
-silently if anything fails.
+resizes, with **zero validation messages**.
+
+On Linux the same self-test passes on Mesa's CPU Vulkan driver (lavapipe):
+on Ubuntu 22.04 through the compute backend (≈ 50 s), and on Ubuntu 26.04,
+whose lavapipe supports `VK_KHR_ray_query`, through the **hardware ray-query
+backend**, both matching the Windows reference image (mean absolute error
+≤ 0.001 per channel). That is also how the ray-query path, which the Intel test
+iGPU can't run, was verified. The extracted release packages pass the
+self-test on both platforms.
 
 ## Design decisions / notes
 
@@ -293,33 +385,45 @@ silently if anything fails.
 - **Platform layer.** Everything OS-specific (DPI awareness, COM, native file
   dialogs, message boxes, the exe's own folder, the memory-mapped scratch file)
   lives behind `src/platform.h` and `src/mmap_image.h`, implemented in
-  `src/platform_win32.cpp` and `src/mmap_image_win32.cpp`. The rest of the code
-  is plain C++20 using `std::filesystem::path` for every file path, so
-  non-ASCII folder and file names work throughout. Linux implementations will
-  sit alongside as `*_posix.cpp`.
+  `src/platform_win32.cpp` / `src/mmap_image_win32.cpp` (Windows) and
+  `src/platform_posix.cpp` / `src/mmap_image_posix.cpp` (Linux); CMake picks
+  the right pair. The rest of the code is plain C++20 using
+  `std::filesystem::path` for every file path, so non-ASCII folder and file
+  names work throughout.
+- **Linux dialogs.** portable-file-dialogs drives `zenity`/`kdialog`, so no GTK
+  or Qt is linked into the app. Windows keeps its native `IFileDialog`.
+- **OBJs from Windows.** `mtllib` references with backslashes or the wrong
+  letter case (`Materials\Scene.MTL`) still resolve on Linux's case-sensitive
+  file systems.
+- **X11 only for now.** GLFW is built without Wayland support; Wayland desktops
+  run the app through XWayland.
 - **Line endings.** `.gitattributes` keeps every text file LF on all platforms,
   so Windows and Linux checkouts are byte-identical.
 - **libjpeg-turbo via ExternalProject.** libjpeg-turbo forbids
   `add_subdirectory` integration, so it is built as an isolated `ExternalProject`
-  (SIMD off, static) and its `jpeg-static.lib` is linked in.
+  (SIMD off, static) and its static library (`jpeg-static.lib` /
+  `libjpeg.a`) is linked in.
 - **stb_image_write is intentionally not used** for saving — it buffers whole
   images in RAM, which is impossible at gigapixel sizes. All writers stream rows.
-- **Scratch files** are created with `FILE_FLAG_DELETE_ON_CLOSE`, so they are
-  reclaimed automatically when the app exits (or a new render starts); the
-  `temp` folder itself stays, empty.
+- **Scratch files** are created with `FILE_FLAG_DELETE_ON_CLOSE` on Windows and
+  unlinked right after creation on Linux, so they are reclaimed automatically
+  when the app exits (or a new render starts), even after a crash; the `temp`
+  folder itself stays, empty.
 
 ## Project layout
 
 ```
-CMakeLists.txt              build + all FetchContent dependencies + tests
+CMakeLists.txt              build + all FetchContent dependencies + tests + CPack
 cmake/embed_spirv.cmake     .spv  ->  embedded C header
+.github/workflows/build.yml CI: Linux (Ubuntu 22.04) + Windows build, test, package
 PORTING.md                  Linux port: analysis, decisions, plan, progress
 shaders/pathtrace.comp      the path tracing kernel (USE_RAY_QUERY ifdef)
 shaders/common.glsl         RNG, BSDFs, intersection, NEE/MIS, sky
 fonts/                      bundled Roboto UI fonts (copied next to the exe)
-src/main.cpp                entry point (portable main + WinMain shim)
+src/main.cpp                entry point (portable main + Windows WinMain shim)
 src/platform.h              OS interface: dialogs, message boxes, exe dir, files
 src/platform_win32.cpp      Windows implementation (DPI, COM, IFileDialog)
+src/platform_posix.cpp      Linux implementation (/proc/self/exe, zenity/kdialog dialogs)
 src/ui.{h,cpp}              window, swapchain, ImGui, tabs, save
 src/renderer.{h,cpp}        out-of-core tile scheduler, batching, recovery
 src/viewer.{h,cpp}          fit/zoom/pan, preview + detail streaming
@@ -330,6 +434,7 @@ src/scene.{h,cpp}           demo scene, materials, light list
 src/obj_loader.{h,cpp}      OBJ/MTL import (any path, smooth normals)
 src/mmap_image.{h,cpp}      disk-backed image: scratch folder, free space
 src/mmap_image_win32.cpp    Windows file mapping (CreateFileMapping/MapViewOfFile)
+src/mmap_image_posix.cpp    Linux file mapping (posix_fallocate + mmap)
 src/savers.{h,cpp}          streaming PNG / JPEG / PPM
 src/mathlib.h               compact vector/matrix math
 src/render_settings.h       the exact resolution / spp / bounce tables
