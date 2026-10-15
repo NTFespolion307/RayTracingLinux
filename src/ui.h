@@ -94,6 +94,7 @@ private:
     int    finalPreviewThrottle_ = 0;
 
     bool         headless_ = false;   // hidden window for --selftest
+    bool         vulkanLoaded_ = false; // volk found the system Vulkan loader
 
     // Save worker
     std::thread  saveThread_;

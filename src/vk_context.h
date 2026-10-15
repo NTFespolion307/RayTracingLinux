@@ -34,7 +34,12 @@ struct Image {
 
 class VkContext {
 public:
-    bool initInstance(bool enableValidation);
+    // Loads the system Vulkan loader through volk. Must succeed before any
+    // other Vulkan call (and before handing vkGetInstanceProcAddr to GLFW).
+    bool loadLoader();
+    // `requiredExtensions` are the windowing system's instance extensions
+    // (glfwGetRequiredInstanceExtensions).
+    bool initInstance(bool enableValidation, const std::vector<const char*>& requiredExtensions);
     // Picks a physical device able to present to `surface`, then creates the
     // logical device + VMA allocator. `surface` is retained for recreation.
     bool createDevice(VkSurfaceKHR surface);

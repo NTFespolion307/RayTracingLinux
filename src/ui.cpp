@@ -38,6 +38,11 @@ PFN_vkVoidFunction imguiLoader(const char* name, void* user) {
 // Window
 // ---------------------------------------------------------------------------
 bool App::initWindow() {
+    // Load the Vulkan loader first and share it with GLFW; GLFW only honours
+    // glfwInitVulkanLoader when it is called before glfwInit.
+    vulkanLoaded_ = ctx_.loadLoader();
+    if (vulkanLoaded_) glfwInitVulkanLoader((PFN_vkGetInstanceProcAddr)vkGetInstanceProcAddr);
+
     if (!glfwInit()) { messageBox("Failed to initialize GLFW.", "VkGigaTracer", MsgError); return false; }
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     if (headless_) glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
@@ -55,14 +60,23 @@ bool App::initVulkan() {
 #else
     bool validation = true;
 #endif
-    if (!ctx_.initInstance(validation)) {
-        messageBox("A Vulkan-capable GPU driver is required to run VkGigaTracer.\n"
-                   "vulkan-1.dll could not be loaded or no Vulkan instance could be created.",
-                   "VkGigaTracer", MsgError);
+    const char* kNoVulkan =
+        "A Vulkan-capable GPU driver is required to run VkGigaTracer.\n"
+        "The Vulkan loader could not be loaded or no Vulkan instance could be created.";
+    uint32_t extCount = 0;
+    const char** glfwExts = vulkanLoaded_ ? glfwGetRequiredInstanceExtensions(&extCount) : nullptr;
+    if (!glfwExts) {
+        vkLog(vulkanLoaded_ ? "initVulkan: no Vulkan surface support from the windowing system"
+                            : "initVulkan: Vulkan loader not found");
+        messageBox(kNoVulkan, "VkGigaTracer", MsgError);
+        return false;
+    }
+    std::vector<const char*> instanceExts(glfwExts, glfwExts + extCount);
+    if (!ctx_.initInstance(validation, instanceExts)) {
+        messageBox(kNoVulkan, "VkGigaTracer", MsgError);
         return false;
     }
     vkLog("initVulkan: instance ok");
-    glfwInitVulkanLoader((PFN_vkGetInstanceProcAddr)vkGetInstanceProcAddr);
 
     if (glfwCreateWindowSurface(ctx_.instance(), window_, nullptr, &surface_) != VK_SUCCESS) {
         messageBox("Failed to create a window surface.", "VkGigaTracer", MsgError);

@@ -72,13 +72,16 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
 // ---------------------------------------------------------------------------
 // Instance
 // ---------------------------------------------------------------------------
-bool VkContext::initInstance(bool enableValidation) {
-    if (!vkCheck(volkInitialize(), "volkInitialize")) return false;
+bool VkContext::loadLoader() {
+    return vkCheck(volkInitialize(), "volkInitialize");
+}
 
-    std::vector<const char*> extensions = {
-        VK_KHR_SURFACE_EXTENSION_NAME,
-        "VK_KHR_win32_surface",
-    };
+bool VkContext::initInstance(bool enableValidation,
+                             const std::vector<const char*>& requiredExtensions) {
+    // Surface extensions come from the windowing system (GLFW): win32 on
+    // Windows, xcb/xlib on X11, wayland on Wayland.
+    std::vector<const char*> extensions = requiredExtensions;
+    const uint32_t requiredCount = (uint32_t)extensions.size();
     std::vector<const char*> layers;
 
     uint32_t layerCount = 0;
@@ -112,7 +115,7 @@ bool VkContext::initInstance(bool enableValidation) {
         if (validationEnabled_) {
             validationEnabled_ = false;
             ci.enabledLayerCount = 0;
-            ci.enabledExtensionCount = 2; // surface + win32 only
+            ci.enabledExtensionCount = requiredCount; // drop the debug-utils extension
             if (!vkCheck(vkCreateInstance(&ci, nullptr, &instance_), "vkCreateInstance(retry)"))
                 return false;
         } else {
