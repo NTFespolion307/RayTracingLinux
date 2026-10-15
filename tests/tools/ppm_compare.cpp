@@ -11,6 +11,7 @@
 // full-resolution mean absolute error is a looser second guard.
 #include <png.h>
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>

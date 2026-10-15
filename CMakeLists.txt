@@ -53,7 +53,11 @@ FetchContent_Declare(VulkanHeaders
     GIT_SHALLOW    TRUE)
 FetchContent_MakeAvailable(VulkanHeaders)
 
-# --- volk (dynamic Vulkan loader; picks up Vulkan::Headers) ---
+# --- volk (dynamic Vulkan loader) ---
+# Point volk at the pinned Vulkan-Headers. Otherwise it falls back to
+# find_package(Vulkan) / $VULKAN_SDK, i.e. whatever SDK happens to be installed,
+# and fails on a machine without one.
+set(VULKAN_HEADERS_INSTALL_DIR "${vulkanheaders_SOURCE_DIR}" CACHE PATH "" FORCE)
 FetchContent_Declare(volk
     GIT_REPOSITORY https://github.com/zeux/volk.git
     GIT_TAG        vulkan-sdk-1.3.296.0
@@ -240,6 +244,19 @@ FetchContent_Declare(glslang
     GIT_TAG        14.3.0
     GIT_SHALLOW    TRUE)
 FetchContent_MakeAvailable(glslang)
+# glslang 14.3.0 uses uint32_t without including <cstdint>; GCC 13+ no longer
+# provides it transitively. Force-include it for glslang's own targets only.
+if(NOT MSVC)
+    foreach(t glslang SPIRV MachineIndependent GenericCodeGen OSDependent
+              SPVRemapper glslang-default-resource-limits glslang-standalone)
+        if(TARGET ${t})
+            get_target_property(_type ${t} TYPE)
+            if(NOT _type STREQUAL "INTERFACE_LIBRARY")
+                target_compile_options(${t} PRIVATE -include cstdint)
+            endif()
+        endif()
+    endforeach()
+endif()
 
 # ---------------------------------------------------------------------------
 # Dear ImGui static library (core + GLFW + Vulkan backends)
