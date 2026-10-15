@@ -9,6 +9,13 @@ All GPU work is done through **Vulkan only** (via dynamic loading with volk). Th
 build produces a **single self-contained `VkGigaTracer.exe`** that runs on a clean
 Windows machine whose only relevant software is a GPU driver.
 
+> **Linux port in progress.** The code base is being made to build and run
+> natively on Linux (Ubuntu 24.04, X11) while staying fully working on Windows.
+> The Windows-side groundwork is done: all OS-specific code now sits behind a
+> small platform layer, and a test suite locks in current behavior. Linux is not
+> usable yet. The plan, decisions and progress are tracked in
+> [PORTING.md](PORTING.md).
+
 ---
 
 ## System requirements (to run)
@@ -24,10 +31,17 @@ Windows machine whose only relevant software is a GPU driver.
   you need roughly **13 GB free** on the scratch drive. Smaller resolutions need
   proportionally less (4K ≈ 32 MB, 8K ≈ 127 MB, 40K ≈ 3.1 GiB). This is the only
   resource the app ever asks you about, and only before a render starts.
+  By default the scratch file goes in a **`temp` folder next to the exe**
+  (created on first use), so it's the exe's drive that needs the space. If that
+  folder can't be created or written (e.g. a read-only install location), the
+  system temp folder is used instead. You can pick any other folder under
+  **Performance → Choose scratch folder…**.
 
-The exe imports only `KERNEL32.dll` and `USER32.dll` — the MSVC runtime is
-statically linked, Vulkan is loaded dynamically at runtime, and all SPIR-V
-shaders are embedded in the binary. There are no companion DLLs or shader files.
+The exe imports only standard Windows system DLLs (`KERNEL32`, `USER32`,
+`GDI32`, `IMM32`, `OLE32`, `SHELL32`). The MSVC runtime is statically linked,
+Vulkan is loaded dynamically at runtime, and all SPIR-V shaders are embedded in
+the binary. The only companion files are the optional UI fonts in `fonts/`
+(see below).
 
 ---
 
@@ -43,13 +57,27 @@ used only to run glslang's build-time code generators.
 
 ### Steps
 
-```bat
-cmake -B build -G "Visual Studio 18 2026" -A x64
-cmake --build build --config Release
-```
+Run each command from the repository root.
 
-(Use `-G "Visual Studio 17 2022"` on a VS 2022 machine.) The resulting binary is
-`build/Release/VkGigaTracer.exe`.
+1. Configure:
+   ```bat
+   cmake -B build -G "Visual Studio 18 2026" -A x64
+   ```
+   Success: the last line is `-- Build files have been written to: …/build`.
+   (Use `-G "Visual Studio 17 2022"` on a VS 2022 machine.)
+2. Build:
+   ```bat
+   cmake --build build --config Release
+   ```
+   Success: `build/Release/VkGigaTracer.exe` exists, with a `fonts` folder next to it.
+3. Run the tests (optional, see below):
+   ```bat
+   ctest --test-dir build -C Release --output-on-failure
+   ```
+   Success: `100% tests passed, 0 tests failed out of 41`.
+
+The first configure downloads and builds every dependency, so it takes a few
+minutes; later builds are incremental.
 
 All third-party libraries are pulled with `FetchContent` at pinned release tags
 and built from source, statically linked:
@@ -66,10 +94,33 @@ and built from source, statically linked:
 | zlib | v1.3.1 | PNG compression |
 | libpng | v1.6.44 | streaming PNG encode |
 | libjpeg-turbo | 3.0.4 | streaming JPEG encode (SIMD off, no NASM) |
+| doctest | v2.4.11 | unit tests only (not linked into the app) |
 
 The two SPIR-V variants of the path tracer are compiled at build time by
 glslang and embedded into the executable as `constexpr` byte arrays
-(`cmake/embed_spirv.cmake`). The exe loads **zero external files** at runtime.
+(`cmake/embed_spirv.cmake`), so no shader files are needed at runtime. The UI
+fonts (Roboto) are copied into `fonts/` next to the exe after every build; if
+they are missing the app falls back to Segoe UI, then ImGui's built-in font.
+
+### Running the tests
+
+The build also produces a test suite, run through CTest (step 3 above):
+
+- **`VkGigaTracerTests`**: CPU-only unit tests (doctest) for the render option
+  tables, the disk-backed image and scratch-folder selection, the PNG / JPEG /
+  PPM writers, OBJ/MTL import (including non-ASCII paths), the demo scene, the
+  BVH (checked against brute-force ray intersection), the GPU struct layouts,
+  and the platform layer.
+- **`selftest_render` + `selftest_golden`** (labelled `gpu`): run
+  `VkGigaTracer.exe --selftest`, then compare its output with the reference
+  image `tests/golden/selftest_1080p_16spp.png` using `ppm_compare`. The
+  comparison uses PSNR over 16×16 block averages, so normal path-tracing noise
+  and small GPU-to-GPU differences pass, while real changes in brightness,
+  color or geometry fail.
+
+On a machine without a Vulkan GPU (e.g. a CI server), skip the GPU tests with
+`ctest --test-dir build -C Release -LE gpu`. Building with
+`-DVKGT_BUILD_TESTS=OFF` leaves the test targets out entirely.
 
 ---
 
@@ -109,9 +160,10 @@ All resolutions are 16:9, selected from a dropdown:
 - **Samples per pixel:** 1, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096
   (1/4/8 are handy for fast look-dev; the default is 16).
 - **Max bounces:** 16, 32, 48, 64.
-- **Tile size** (Advanced): 128 / 256 / 512 (default 256).
+- **Tile size** (Performance): 128 / 256 / 512 (default 256).
 - Plus exposure, firefly clamp, sky on/off + intensity, backend override
-  (Auto / Hardware RT / Compute), and a scratch-folder picker.
+  (Auto / Hardware RT / Compute), and a scratch-folder picker (Performance; shows
+  the default `temp` folder next to the exe until you choose another).
 
 ### Saving
 
@@ -137,11 +189,12 @@ The headline trick is that **no full-resolution buffer is ever allocated** — n
 in VRAM, not in system RAM.
 
 1. **Disk-backed image.** At render start the app creates a scratch file of
-   `width × height × 4` bytes (RGBA8) in the scratch folder and maps it with a
-   single 64-bit `MapViewOfFile`. The renderer writes finished pixels straight
-   into this mapping. The image's size is therefore bounded only by free disk
-   space; 80K is ≈ 12.4 GiB on disk and a few hundred MB of committed host RAM.
-   (`src/mmap_image.{h,cpp}`)
+   `width × height × 4` bytes (RGBA8) in the scratch folder (by default `temp/`
+   next to the exe) and maps it with a single 64-bit `MapViewOfFile`. The
+   renderer writes finished pixels straight into this mapping. The image's size
+   is therefore bounded only by free disk space; 80K is ≈ 12.4 GiB on disk and a
+   few hundred MB of committed host RAM. (`src/mmap_image.{h,cpp}` for folder
+   selection and free-space checks, `src/mmap_image_win32.cpp` for the mapping)
 
 2. **Tiles.** The image is split into tiles (default 256×256). The GPU holds a
    **single** RGBA32F accumulation tile (≈ 1–4 MiB) plus small staging — GPU
@@ -208,18 +261,22 @@ auto-enabled so renders are never black.
 
 Running `VkGigaTracer.exe --selftest` performs a headless (hidden-window)
 render of the demo scene at 1080p / 16 spp / 16 bounces, writes
-`selftest_out.ppm` next to the exe, and logs progress to `gigatracer.log`. This
-is how the render path is validated without opening the UI.
+`selftest_out.ppm` to the **current working directory**, and logs progress to
+`gigatracer.log` next to the exe. This is how the render path is validated
+without opening the UI; the `selftest_golden` test (see
+[Running the tests](#running-the-tests)) checks the image against a reference.
 
 This repository was built and run on an **Intel UHD Graphics** iGPU (the
 compute fallback backend), where the self-test renders the Cornell demo to a
 correct, physically-plausible image (red/green walls, color bleeding, sky) in
-~11 s and saves a 5.9 MB PPM. The exe imports only `KERNEL32`, `USER32`,
-`GDI32`, `IMM32`, `OLE32` and `SHELL32` — all standard Windows system DLLs. The
-hardware ray-query backend compiles and is selected automatically on capable
-GPUs; it was not runtime-exercised on this machine (the test iGPU exposes no
-`VK_KHR_ray_query`), but it shares 95% of its code with the verified compute
-path and falls back silently if anything fails.
+~12 s and saves a 5.9 MB PPM. Two runs on the same GPU produce bit-identical
+images. The Debug build (which enables the Khronos validation layer when it is
+installed) runs both the self-test and the interactive UI, including window
+resizes, with **zero validation messages**. The hardware ray-query backend
+compiles and is selected automatically on capable GPUs; it was not
+runtime-exercised on this machine (the test iGPU exposes no `VK_KHR_ray_query`),
+but it shares 95% of its code with the verified compute path and falls back
+silently if anything fails.
 
 ## Design decisions / notes
 
@@ -229,33 +286,53 @@ path and falls back silently if anything fails.
 - **Embeddable Python.** glslang's build needs a Python interpreter for its code
   generators. To keep the build machine requirement at "VS + CMake + internet",
   CMake fetches the official Windows embeddable Python automatically and points
-  glslang at it; nothing is installed system-wide.
+  glslang at it; nothing is installed system-wide. (On Linux the system
+  `python3` is used instead.)
+- **Platform layer.** Everything OS-specific (DPI awareness, COM, native file
+  dialogs, message boxes, the exe's own folder, the memory-mapped scratch file)
+  lives behind `src/platform.h` and `src/mmap_image.h`, implemented in
+  `src/platform_win32.cpp` and `src/mmap_image_win32.cpp`. The rest of the code
+  is plain C++20 using `std::filesystem::path` for every file path, so
+  non-ASCII folder and file names work throughout. Linux implementations will
+  sit alongside as `*_posix.cpp`.
+- **Line endings.** `.gitattributes` keeps every text file LF on all platforms,
+  so Windows and Linux checkouts are byte-identical.
 - **libjpeg-turbo via ExternalProject.** libjpeg-turbo forbids
   `add_subdirectory` integration, so it is built as an isolated `ExternalProject`
   (SIMD off, static) and its `jpeg-static.lib` is linked in.
 - **stb_image_write is intentionally not used** for saving — it buffers whole
   images in RAM, which is impossible at gigapixel sizes. All writers stream rows.
 - **Scratch files** are created with `FILE_FLAG_DELETE_ON_CLOSE`, so they are
-  reclaimed automatically when the app exits (or a new render starts).
+  reclaimed automatically when the app exits (or a new render starts); the
+  `temp` folder itself stays, empty.
 
 ## Project layout
 
 ```
-CMakeLists.txt              build + all FetchContent dependencies
+CMakeLists.txt              build + all FetchContent dependencies + tests
 cmake/embed_spirv.cmake     .spv  ->  embedded C header
+PORTING.md                  Linux port: analysis, decisions, plan, progress
 shaders/pathtrace.comp      the path tracing kernel (USE_RAY_QUERY ifdef)
 shaders/common.glsl         RNG, BSDFs, intersection, NEE/MIS, sky
-src/main.cpp                entry, DPI, COM
-src/ui.{h,cpp}              window, swapchain, ImGui, tabs, dialogs, save
+fonts/                      bundled Roboto UI fonts (copied next to the exe)
+src/main.cpp                entry point (portable main + WinMain shim)
+src/platform.h              OS interface: dialogs, message boxes, exe dir, files
+src/platform_win32.cpp      Windows implementation (DPI, COM, IFileDialog)
+src/ui.{h,cpp}              window, swapchain, ImGui, tabs, save
 src/renderer.{h,cpp}        out-of-core tile scheduler, batching, recovery
 src/viewer.{h,cpp}          fit/zoom/pan, preview + detail streaming
 src/vk_context.{h,cpp}      instance/device/backend selection (volk, VMA)
 src/accel.{h,cpp}           BLAS/TLAS for the hardware ray-query path
 src/bvh.{h,cpp}             binned-SAH BVH for the compute path
 src/scene.{h,cpp}           demo scene, materials, light list
-src/obj_loader.{h,cpp}      OBJ/MTL import (wide paths, smooth normals)
-src/mmap_image.{h,cpp}      disk-backed memory-mapped image
+src/obj_loader.{h,cpp}      OBJ/MTL import (any path, smooth normals)
+src/mmap_image.{h,cpp}      disk-backed image: scratch folder, free space
+src/mmap_image_win32.cpp    Windows file mapping (CreateFileMapping/MapViewOfFile)
 src/savers.{h,cpp}          streaming PNG / JPEG / PPM
 src/mathlib.h               compact vector/matrix math
 src/render_settings.h       the exact resolution / spp / bounce tables
+tests/test_*.cpp            doctest unit tests
+tests/data/                 OBJ/MTL fixtures for the loader tests
+tests/golden/               reference image for the self-test comparison
+tests/tools/ppm_compare.cpp golden-image comparison tool
 ```
