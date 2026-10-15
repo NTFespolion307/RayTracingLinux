@@ -111,6 +111,8 @@ std::filesystem::path exeDir() {
     return std::filesystem::path(buf).parent_path();
 }
 
+unsigned processId() { return (unsigned)GetCurrentProcessId(); }
+
 FILE* openFile(const std::filesystem::path& path, const char* mode) {
     return _wfopen(path.c_str(), utf8ToWide(mode).c_str());
 }

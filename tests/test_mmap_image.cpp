@@ -94,3 +94,41 @@ TEST_CASE("resolveFolder and freeSpace") {
     CHECK(MmapImage::freeSpace(dir.path(), freeBytes));
     CHECK(freeBytes > 0);
 }
+
+TEST_CASE("default scratch folder is <exe dir>/temp") {
+    fs::path expected = platform::exeDir() / "temp";
+    CHECK(MmapImage::defaultFolder() == expected);
+    CHECK(MmapImage::resolveFolder({}) == expected);
+    CHECK(fs::is_directory(expected));
+}
+
+TEST_CASE("create with no folder uses the default scratch folder") {
+    MmapImage img;
+    REQUIRE(img.create({}, 8, 8));
+    fs::path p = img.path();
+    CHECK(p.parent_path() == MmapImage::defaultFolder());
+    CHECK(fs::exists(p));
+    img.destroy();
+    CHECK_FALSE(fs::exists(p));
+}
+
+TEST_CASE("chooseFolder creates a writable preferred folder") {
+    TempDir dir("mmap");
+    fs::path preferred = dir.path() / "nested" / "temp";
+    fs::path fallback = dir.path() / "fallback";
+    CHECK(MmapImage::chooseFolder(preferred, fallback) == preferred);
+    CHECK(fs::is_directory(preferred));
+    // The write probe must not be left behind.
+    CHECK(fs::is_empty(preferred));
+}
+
+TEST_CASE("chooseFolder falls back when the preferred folder can't be created") {
+    TempDir dir("mmap");
+    // A regular file where a directory would need to be: creation must fail.
+    fs::path blocker = dir.path() / "blocker";
+    FILE* f = platform::openFile(blocker, "wb");
+    REQUIRE(f);
+    std::fclose(f);
+    fs::path fallback = dir.path() / "fallback";
+    CHECK(MmapImage::chooseFolder(blocker / "temp", fallback) == fallback);
+}

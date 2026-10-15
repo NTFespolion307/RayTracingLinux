@@ -34,6 +34,9 @@ std::filesystem::path pickFolderDialog();
 // Directory containing the running executable.
 std::filesystem::path exeDir();
 
+// Current process id (used for unique scratch file names).
+unsigned processId();
+
 // fopen() for any path, including non-ASCII ones (Windows needs _wfopen).
 FILE* openFile(const std::filesystem::path& path, const char* mode);
 

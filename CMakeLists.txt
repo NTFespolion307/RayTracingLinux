@@ -316,9 +316,9 @@ set(APP_SOURCES
 
 # OS-specific implementations of src/platform.h.
 if(WIN32)
-    list(APPEND APP_SOURCES src/platform_win32.cpp)
+    list(APPEND APP_SOURCES src/platform_win32.cpp src/mmap_image_win32.cpp)
 else()
-    list(APPEND APP_SOURCES src/platform_posix.cpp)
+    list(APPEND APP_SOURCES src/platform_posix.cpp src/mmap_image_posix.cpp)
 endif()
 
 add_executable(VkGigaTracer WIN32 ${APP_SOURCES})
@@ -411,10 +411,10 @@ if(VKGT_BUILD_TESTS)
         DOCTEST_CONFIG_USE_STD_HEADERS)  # avoid std:: forward decls (MSVC C5285)
     target_link_libraries(VkGigaTracerTests PRIVATE png_static zlibstatic jpegturbo Threads::Threads)
     if(WIN32)
-        target_sources(VkGigaTracerTests PRIVATE src/platform_win32.cpp)
+        target_sources(VkGigaTracerTests PRIVATE src/platform_win32.cpp src/mmap_image_win32.cpp)
         target_link_libraries(VkGigaTracerTests PRIVATE Ole32 Shell32)
     else()
-        target_sources(VkGigaTracerTests PRIVATE src/platform_posix.cpp)
+        target_sources(VkGigaTracerTests PRIVATE src/platform_posix.cpp src/mmap_image_posix.cpp)
     endif()
 
     include(${doctest_SOURCE_DIR}/scripts/cmake/doctest.cmake)

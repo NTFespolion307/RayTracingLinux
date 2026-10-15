@@ -1,6 +1,8 @@
 # Porting VkGigaTracer to Linux
 
-Status: plan approved 2026-10-15. **Step 1 done** (test suite + golden image; self-test now 16 spp).
+Status: plan approved 2026-10-15. **Steps 1–8 done** (Windows-side refactor complete; Windows build verified, 41/41 tests). Next: step 9, the first Linux build in WSL.
+
+Extra fix found along the way: three pre-existing Vulkan validation errors (descriptor pool type, buffer usage, swapchain semaphores); the Debug build now runs with zero validation messages.
 
 Run the tests (from the repo root, after building): `ctest --test-dir build -C Release --output-on-failure`. Add `-LE gpu` to skip the two tests that need a Vulkan GPU.
 

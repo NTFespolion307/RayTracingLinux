@@ -489,7 +489,9 @@ void App::drawSidebar() {
                          [](int i, char* b, size_t n) { std::snprintf(b, n, "%d", kTileSizeOptions[i]); });
         if (t >= 0) settings_.tileSize = kTileSizeOptions[t];
 
-        std::string sf = settings_.scratchFolder.empty() ? "(system temp)" : platform::toUtf8(settings_.scratchFolder);
+        std::string sf = settings_.scratchFolder.empty()
+            ? platform::toUtf8(MmapImage::defaultFolder()) + " (default)"
+            : platform::toUtf8(settings_.scratchFolder);
         ImGui::PushStyleColor(ImGuiCol_Text, theme::colors().textMuted);
         ImGui::TextWrapped("Scratch: %s", sf.c_str());
         ImGui::PopStyleColor();
