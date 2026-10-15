@@ -1,5 +1,10 @@
 cmake_minimum_required(VERSION 3.24)
-project(VkGigaTracer LANGUAGES C CXX)
+# Header-only and custom-built dependencies use FetchContent_Populate(<name>),
+# which CMake 3.30+ flags as deprecated; keep the established behaviour quietly.
+if(POLICY CMP0169)
+    cmake_policy(SET CMP0169 OLD)
+endif()
+project(VkGigaTracer VERSION 1.0.0 LANGUAGES C CXX)
 
 # ---------------------------------------------------------------------------
 # Global settings
@@ -119,6 +124,7 @@ endif()
 
 # --- zlib (static) ---
 set(ZLIB_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(SKIP_INSTALL_ALL     ON  CACHE BOOL "" FORCE)  # zlib: no install rules (we link it statically)
 FetchContent_Declare(zlib
     GIT_REPOSITORY https://github.com/madler/zlib.git
     GIT_TAG        v1.3.1
@@ -396,6 +402,33 @@ add_custom_command(TARGET VkGigaTracer POST_BUILD
             "${CMAKE_SOURCE_DIR}/fonts"
             "$<TARGET_FILE_DIR:VkGigaTracer>/fonts"
     COMMENT "Copying bundled UI fonts")
+
+# ---------------------------------------------------------------------------
+# Release package: `cpack` (Linux) / `cpack -C Release` (Windows) in the build
+# dir produces VkGigaTracer-<version>-linux-x86_64.tar.gz or
+# VkGigaTracer-<version>-windows-x64.zip with the app, fonts/, README, LICENSE.
+# Only the "app" component is packaged, so dependencies' own install rules
+# (headers, static libs) never end up in the archive.
+# ---------------------------------------------------------------------------
+install(TARGETS VkGigaTracer RUNTIME DESTINATION . COMPONENT app)
+install(DIRECTORY fonts/ DESTINATION fonts COMPONENT app)
+install(FILES LICENSE README.md DESTINATION . COMPONENT app)
+
+set(CPACK_PACKAGE_NAME "VkGigaTracer")
+set(CPACK_PACKAGE_VENDOR "NTF307")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Out-of-core Vulkan path tracer for gigapixel renders")
+set(CPACK_COMPONENTS_ALL app)
+# Install only our "app" component when packaging (never dependency rules).
+set(CPACK_INSTALL_CMAKE_PROJECTS "${CMAKE_BINARY_DIR};${PROJECT_NAME};app;/")
+set(CPACK_STRIP_FILES ON)
+if(WIN32)
+    set(CPACK_GENERATOR ZIP)
+    set(CPACK_PACKAGE_FILE_NAME "VkGigaTracer-${PROJECT_VERSION}-windows-x64")
+else()
+    set(CPACK_GENERATOR TGZ)
+    set(CPACK_PACKAGE_FILE_NAME "VkGigaTracer-${PROJECT_VERSION}-linux-x86_64")
+endif()
+include(CPack)
 
 # ---------------------------------------------------------------------------
 # Tests (doctest unit tests + golden-image self-test). Run with:
