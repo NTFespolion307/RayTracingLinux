@@ -1,0 +1,16 @@
+# Same line endings on every platform: LF in the repo and in working trees,
+# so Windows and Linux/WSL checkouts are byte-identical.
+* text=auto eol=lf
+
+# Windows scripts keep CRLF.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Binary assets.
+*.ttf binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ppm binary
+*.spv binary
