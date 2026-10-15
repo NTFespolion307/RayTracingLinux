@@ -118,7 +118,9 @@ bool Renderer::createPipeline() {
     };
     VkDescriptorPoolCreateInfo dpci{ VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO };
     dpci.maxSets = 1;
-    dpci.poolSizeCount = 3;
+    // The acceleration-structure descriptor type only exists when that
+    // extension is enabled (hardware RT backend).
+    dpci.poolSizeCount = (backend_ == Backend::HardwareRT) ? 3 : 2;
     dpci.pPoolSizes = sizes;
     if (!vkCheck(vkCreateDescriptorPool(dev, &dpci, nullptr, &dpool_), "createDescriptorPool")) return false;
 
@@ -281,7 +283,8 @@ bool Renderer::prepareScene(const Scene& scene, Backend requested) {
     accumCapacity_ = 512 * 512;
     ctx_->destroyBuffer(accumBuf_);
     if (!ctx_->createBuffer((VkDeviceSize)accumCapacity_ * sizeof(float) * 4,
-                            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, accumBuf_, true)) return false;
+                            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                            accumBuf_, true)) return false;
 
     previewReset_.store(true);
     previewSpp_ = 0;
@@ -669,7 +672,8 @@ bool Renderer::renderPreviewFrame(uint32_t w, uint32_t h, const RenderSettings& 
     if (pw != previewW_ || ph != previewH_) {
         ctx_->destroyBuffer(previewAccum_);
         if (!ctx_->createBuffer((VkDeviceSize)pw * ph * sizeof(float) * 4,
-                                VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, previewAccum_, true))
+                                VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                                previewAccum_, true))
             return false;
         previewW_ = pw; previewH_ = ph;
         previewReset_.store(true);

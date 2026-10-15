@@ -70,7 +70,7 @@ private:
     VkCommandPool   framePool_ = VK_NULL_HANDLE;
     VkCommandBuffer frameCmd_[kFramesInFlight]{};
     VkSemaphore     imgAvail_[kFramesInFlight]{};
-    VkSemaphore     renderDone_[kFramesInFlight]{};
+    std::vector<VkSemaphore> renderDone_;   // one per swapchain image
     VkFence         inFlight_[kFramesInFlight]{};
     uint32_t        frameIndex_ = 0;
     VkDescriptorPool imguiPool_ = VK_NULL_HANDLE;

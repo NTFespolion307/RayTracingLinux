@@ -150,7 +150,6 @@ bool App::initVulkan() {
     fci.flags = VK_FENCE_CREATE_SIGNALED_BIT;
     for (int i = 0; i < kFramesInFlight; ++i) {
         vkCreateSemaphore(ctx_.device(), &sci, nullptr, &imgAvail_[i]);
-        vkCreateSemaphore(ctx_.device(), &sci, nullptr, &renderDone_[i]);
         vkCreateFence(ctx_.device(), &fci, nullptr, &inFlight_[i]);
     }
 
@@ -219,14 +218,23 @@ bool App::createSwapchain() {
         fbci.layers = 1;
         vkCreateFramebuffer(ctx_.device(), &fbci, nullptr, &scFramebuffers_[i]);
     }
+
+    // One "render finished" semaphore per swapchain image: presentation of an
+    // image may still hold its semaphore after the frame-in-flight fence fires.
+    VkSemaphoreCreateInfo sci{ VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
+    renderDone_.assign(n, VK_NULL_HANDLE);
+    for (uint32_t i = 0; i < n; ++i)
+        vkCreateSemaphore(ctx_.device(), &sci, nullptr, &renderDone_[i]);
     return true;
 }
 
 void App::destroySwapchain() {
     for (auto fb : scFramebuffers_) vkDestroyFramebuffer(ctx_.device(), fb, nullptr);
     for (auto v : scViews_) vkDestroyImageView(ctx_.device(), v, nullptr);
+    for (auto s : renderDone_) vkDestroySemaphore(ctx_.device(), s, nullptr);
     scFramebuffers_.clear();
     scViews_.clear();
+    renderDone_.clear();
     if (swapchain_) { vkDestroySwapchainKHR(ctx_.device(), swapchain_, nullptr); swapchain_ = VK_NULL_HANDLE; }
 }
 
@@ -832,7 +840,7 @@ void App::drawFrame() {
     si.commandBufferCount = 1;
     si.pCommandBuffers = &cmd;
     si.signalSemaphoreCount = 1;
-    si.pSignalSemaphores = &renderDone_[frameIndex_];
+    si.pSignalSemaphores = &renderDone_[imageIndex];
 
     VkResult pres;
     {
@@ -841,7 +849,7 @@ void App::drawFrame() {
 
         VkPresentInfoKHR pi{ VK_STRUCTURE_TYPE_PRESENT_INFO_KHR };
         pi.waitSemaphoreCount = 1;
-        pi.pWaitSemaphores = &renderDone_[frameIndex_];
+        pi.pWaitSemaphores = &renderDone_[imageIndex];
         pi.swapchainCount = 1;
         pi.pSwapchains = &swapchain_;
         pi.pImageIndices = &imageIndex;
@@ -879,7 +887,6 @@ void App::cleanup() {
 
     for (int i = 0; i < kFramesInFlight; ++i) {
         if (imgAvail_[i]) vkDestroySemaphore(ctx_.device(), imgAvail_[i], nullptr);
-        if (renderDone_[i]) vkDestroySemaphore(ctx_.device(), renderDone_[i], nullptr);
         if (inFlight_[i]) vkDestroyFence(ctx_.device(), inFlight_[i], nullptr);
     }
     if (framePool_) vkDestroyCommandPool(ctx_.device(), framePool_, nullptr);
