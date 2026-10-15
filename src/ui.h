@@ -11,6 +11,7 @@
 
 #include <thread>
 #include <vector>
+#include <filesystem>
 #include <string>
 
 struct GLFWwindow;
@@ -100,6 +101,6 @@ private:
     bool         saving_ = false;
     bool         openSavePopup_ = false;
     bool         saveModalOpen_ = false;
-    std::wstring pendingSavePath_;
+    std::filesystem::path pendingSavePath_;
     SaveFormat   pendingSaveFormat_ = SaveFormat::PNG;
 };

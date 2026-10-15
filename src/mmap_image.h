@@ -3,6 +3,7 @@
 // render; its size is bounded only by free disk space, never by RAM or VRAM.
 #pragma once
 #include <cstdint>
+#include <filesystem>
 #include <string>
 #include <windows.h>
 
@@ -16,7 +17,7 @@ public:
 
     // Creates a width*height*4 byte file in `folder` and maps it.
     // Returns false on failure (caller surfaces disk-space messaging itself).
-    bool create(const std::wstring& folder, uint32_t width, uint32_t height);
+    bool create(const std::filesystem::path& folder, uint32_t width, uint32_t height);
     void destroy();
 
     bool valid() const { return base_ != nullptr; }
@@ -29,15 +30,15 @@ public:
     const uint8_t* rowPtr(uint32_t y) const { return base_ + (uint64_t)y * width_ * 4ull; }
     uint8_t* data() { return base_; }
 
-    const std::wstring& path() const { return path_; }
+    const std::filesystem::path& path() const { return path_; }
 
     // Required free bytes for a given resolution.
     static uint64_t requiredBytes(uint32_t w, uint32_t h) { return (uint64_t)w * h * 4ull; }
 
     // Queries free bytes available on the volume that would hold `folder`.
-    static bool freeSpace(const std::wstring& folder, uint64_t& freeBytes);
+    static bool freeSpace(const std::filesystem::path& folder, uint64_t& freeBytes);
     // Returns the effective scratch folder (system temp if `folder` empty).
-    static std::wstring resolveFolder(const std::wstring& folder);
+    static std::filesystem::path resolveFolder(const std::filesystem::path& folder);
 
 private:
     HANDLE   file_    = INVALID_HANDLE_VALUE;
@@ -45,5 +46,5 @@ private:
     uint8_t* base_    = nullptr;
     uint32_t width_   = 0;
     uint32_t height_  = 0;
-    std::wstring path_;
+    std::filesystem::path path_;
 };

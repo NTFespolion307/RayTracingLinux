@@ -27,14 +27,6 @@ void messageBox(const char* text, const char* title, platform::MessageKind kind)
     platform::showMessage(kind, text, title);
 }
 
-std::string wideToUtf8(const std::wstring& w) {
-    if (w.empty()) return {};
-    int n = WideCharToMultiByte(CP_UTF8, 0, w.c_str(), (int)w.size(), nullptr, 0, nullptr, nullptr);
-    std::string s(n, 0);
-    WideCharToMultiByte(CP_UTF8, 0, w.c_str(), (int)w.size(), s.data(), n, nullptr, nullptr);
-    return s;
-}
-
 PFN_vkVoidFunction imguiLoader(const char* name, void* user) {
     return vkGetInstanceProcAddr((VkInstance)user, name);
 }
@@ -298,7 +290,7 @@ void App::loadDemoScene() {
 }
 
 void App::loadObjDialog() {
-    std::wstring path = platform::openFileDialog({ { "Wavefront OBJ", "*.obj" },
+    std::filesystem::path path = platform::openFileDialog({ { "Wavefront OBJ", "*.obj" },
                                                    { "All files", "*.*" } });
     if (path.empty()) return;
     ObjLoadResult res = loadObj(path);
@@ -323,7 +315,7 @@ void App::loadObjDialog() {
 
 void App::startFinalRender() {
     if (!sceneReady_ || renderer_.finalRunning()) return;
-    std::wstring err;
+    std::string err;
     uint64_t required = 0;
     if (!renderer_.startFinalRender(scene_, settings_, err, required)) {
         double gb = required / (1024.0 * 1024.0 * 1024.0);
@@ -350,7 +342,7 @@ void App::startSave(SaveFormat fmt) {
         case SaveFormat::JPEG: ext = "jpg"; desc = "JPEG image"; pat = "*.jpg"; break;
         default:               ext = "ppm"; desc = "Portable Pixmap"; pat = "*.ppm"; break;
     }
-    std::wstring path = platform::saveFileDialog({ desc, pat }, ext);
+    std::filesystem::path path = platform::saveFileDialog({ desc, pat }, ext);
     if (path.empty()) return;
 
     if (saveThread_.joinable()) saveThread_.join();
@@ -474,12 +466,12 @@ void App::drawSidebar() {
                          [](int i, char* b, size_t n) { std::snprintf(b, n, "%d", kTileSizeOptions[i]); });
         if (t >= 0) settings_.tileSize = kTileSizeOptions[t];
 
-        std::string sf = settings_.scratchFolder.empty() ? "(system temp)" : wideToUtf8(settings_.scratchFolder);
+        std::string sf = settings_.scratchFolder.empty() ? "(system temp)" : platform::toUtf8(settings_.scratchFolder);
         ImGui::PushStyleColor(ImGuiCol_Text, theme::colors().textMuted);
         ImGui::TextWrapped("Scratch: %s", sf.c_str());
         ImGui::PopStyleColor();
         if (theme::SecondaryButton("Choose scratch folder...", ImVec2(-FLT_MIN, 0))) {
-            std::wstring f = platform::pickFolderDialog();
+            std::filesystem::path f = platform::pickFolderDialog();
             if (!f.empty()) settings_.scratchFolder = f;
         }
     }
@@ -898,7 +890,7 @@ int App::runSelfTest() {
     settings_.maxBounces = 16;
     settings_.tileSize = 256;
 
-    std::wstring err; uint64_t req = 0;
+    std::string err; uint64_t req = 0;
     if (!renderer_.startFinalRender(scene_, settings_, err, req)) {
         vkLog("selftest: startFinalRender failed");
         return 1;
@@ -912,7 +904,7 @@ int App::runSelfTest() {
     vkLog(buf);
 
     SaveProgress sp;
-    bool ok = saveImage(renderer_.finalImage(), L"selftest_out.ppm", SaveFormat::PPM, 92, sp);
+    bool ok = saveImage(renderer_.finalImage(), "selftest_out.ppm", SaveFormat::PPM, 92, sp);
     vkLog(ok ? "selftest: PPM saved" : "selftest: PPM save FAILED");
 
     cleanup();

@@ -2,6 +2,7 @@
 // deterministic material mapping, auto-centering and camera framing.
 #pragma once
 #include "scene.h"
+#include <filesystem>
 #include <string>
 
 struct ObjLoadResult {
@@ -10,5 +11,5 @@ struct ObjLoadResult {
     Scene       scene;
 };
 
-// Loads an OBJ from a wide (UTF-16) path so non-ASCII directories work.
-ObjLoadResult loadObj(const std::wstring& widePath);
+// Loads an OBJ (and its MTL files) from any path, including non-ASCII ones.
+ObjLoadResult loadObj(const std::filesystem::path& path);

@@ -11,7 +11,7 @@ extern "C" {
 
 namespace {
 
-FILE* wfopenWrite(const std::wstring& path) {
+FILE* wfopenWrite(const std::filesystem::path& path) {
     return _wfopen(path.c_str(), L"wb");
 }
 
@@ -24,14 +24,14 @@ inline void rgbaToRgb(const uint8_t* src, uint8_t* dst, uint32_t width) {
     }
 }
 
-void deletePartial(const std::wstring& path) { _wremove(path.c_str()); }
+void deletePartial(const std::filesystem::path& path) { _wremove(path.c_str()); }
 
 } // namespace
 
 // ---------------------------------------------------------------------------
 // PNG
 // ---------------------------------------------------------------------------
-bool savePNG(const MmapImage& img, const std::wstring& path, SaveProgress& p) {
+bool savePNG(const MmapImage& img, const std::filesystem::path& path, SaveProgress& p) {
     FILE* fp = wfopenWrite(path);
     if (!fp) { p.message = "Could not create the PNG file."; return false; }
 
@@ -89,7 +89,7 @@ void jpegErrorExit(j_common_ptr cinfo) {
 }
 } // namespace
 
-bool saveJPEG(const MmapImage& img, const std::wstring& path, int quality, SaveProgress& p) {
+bool saveJPEG(const MmapImage& img, const std::filesystem::path& path, int quality, SaveProgress& p) {
     if (img.width() > kJpegMaxSide || img.height() > kJpegMaxSide) {
         p.message = "JPEG cannot exceed 65500 px per side at this resolution.";
         return false;
@@ -146,7 +146,7 @@ bool saveJPEG(const MmapImage& img, const std::wstring& path, int quality, SaveP
 // ---------------------------------------------------------------------------
 // PPM (P6 binary) - GIMP opens this natively with no import dialog.
 // ---------------------------------------------------------------------------
-bool savePPM(const MmapImage& img, const std::wstring& path, SaveProgress& p) {
+bool savePPM(const MmapImage& img, const std::filesystem::path& path, SaveProgress& p) {
     FILE* fp = wfopenWrite(path);
     if (!fp) { p.message = "Could not create the PPM file."; return false; }
 
@@ -175,7 +175,7 @@ bool savePPM(const MmapImage& img, const std::wstring& path, SaveProgress& p) {
     return true;
 }
 
-bool saveImage(const MmapImage& img, const std::wstring& path,
+bool saveImage(const MmapImage& img, const std::filesystem::path& path,
                SaveFormat fmt, int jpegQuality, SaveProgress& p) {
     bool ok = false;
     switch (fmt) {

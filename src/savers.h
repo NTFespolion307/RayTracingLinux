@@ -4,6 +4,7 @@
 #pragma once
 #include "mmap_image.h"
 #include <atomic>
+#include <filesystem>
 #include <string>
 
 enum class SaveFormat { PNG, JPEG, PPM };
@@ -17,11 +18,11 @@ struct SaveProgress {
 };
 
 // All synchronous; call from a worker thread. Honor progress.cancel between
-// rows. Wide path so non-ASCII destinations work.
-bool savePNG (const MmapImage& img, const std::wstring& path, SaveProgress& p);
-bool saveJPEG(const MmapImage& img, const std::wstring& path, int quality, SaveProgress& p);
-bool savePPM (const MmapImage& img, const std::wstring& path, SaveProgress& p);
+// rows. Any path works, including non-ASCII ones.
+bool savePNG (const MmapImage& img, const std::filesystem::path& path, SaveProgress& p);
+bool saveJPEG(const MmapImage& img, const std::filesystem::path& path, int quality, SaveProgress& p);
+bool savePPM (const MmapImage& img, const std::filesystem::path& path, SaveProgress& p);
 
 // Dispatches by format; quality only used for JPEG.
-bool saveImage(const MmapImage& img, const std::wstring& path,
+bool saveImage(const MmapImage& img, const std::filesystem::path& path,
                SaveFormat fmt, int jpegQuality, SaveProgress& p);

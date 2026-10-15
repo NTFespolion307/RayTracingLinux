@@ -2,47 +2,29 @@
 #include "obj_loader.h"
 #include "tiny_obj_loader.h"
 
-#include <windows.h>
+#include "platform.h"
+#include <algorithm>
+#include <cmath>
 #include <fstream>
+#include <map>
 #include <sstream>
 #include <unordered_map>
 #include <cstdint>
 
 namespace {
 
-std::string wideToUtf8(const std::wstring& w) {
-    if (w.empty()) return {};
-    int n = WideCharToMultiByte(CP_UTF8, 0, w.c_str(), (int)w.size(), nullptr, 0, nullptr, nullptr);
-    std::string s(n, 0);
-    WideCharToMultiByte(CP_UTF8, 0, w.c_str(), (int)w.size(), s.data(), n, nullptr, nullptr);
-    return s;
-}
-
-std::wstring utf8ToWide(const std::string& s) {
-    if (s.empty()) return {};
-    int n = MultiByteToWideChar(CP_UTF8, 0, s.c_str(), (int)s.size(), nullptr, 0);
-    std::wstring w(n, 0);
-    MultiByteToWideChar(CP_UTF8, 0, s.c_str(), (int)s.size(), w.data(), n);
-    return w;
-}
-
-// Splits a wide path into directory (with trailing slash) and filename.
-std::wstring dirOf(const std::wstring& path) {
-    size_t p = path.find_last_of(L"\\/");
-    if (p == std::wstring::npos) return L"";
-    return path.substr(0, p + 1);
-}
-
-// MaterialReader that opens .mtl files via wide paths (non-ASCII safe).
-class WideMaterialReader : public tinyobj::MaterialReader {
+// MaterialReader that opens .mtl files relative to the OBJ's directory via
+// std::filesystem paths (non-ASCII safe on every platform). MTL names in the
+// OBJ are UTF-8.
+class PathMaterialReader : public tinyobj::MaterialReader {
 public:
-    explicit WideMaterialReader(std::wstring baseDir) : baseDir_(std::move(baseDir)) {}
+    explicit PathMaterialReader(std::filesystem::path baseDir) : baseDir_(std::move(baseDir)) {}
     bool operator()(const std::string& matId,
                     std::vector<tinyobj::material_t>* materials,
                     std::map<std::string, int>* matMap,
                     std::string* err) override {
-        std::wstring full = baseDir_ + utf8ToWide(matId);
-        std::ifstream stream(full.c_str(), std::ios::binary);
+        std::filesystem::path full = baseDir_ / platform::fromUtf8(matId);
+        std::ifstream stream(full, std::ios::binary);
         if (!stream) {
             if (err) *err += "Could not open material file: " + matId + "\n";
             return true; // not fatal; OBJ still renders with defaults
@@ -56,7 +38,7 @@ public:
         return true;
     }
 private:
-    std::wstring baseDir_;
+    std::filesystem::path baseDir_;
 };
 
 GPUMaterial mapMaterial(const tinyobj::material_t& m) {
@@ -93,10 +75,10 @@ GPUMaterial mapMaterial(const tinyobj::material_t& m) {
 
 } // namespace
 
-ObjLoadResult loadObj(const std::wstring& widePath) {
+ObjLoadResult loadObj(const std::filesystem::path& path) {
     ObjLoadResult result;
 
-    std::ifstream objStream(widePath.c_str(), std::ios::binary);
+    std::ifstream objStream(path, std::ios::binary);
     if (!objStream) {
         result.message = "Could not open the OBJ file.";
         return result;
@@ -107,7 +89,7 @@ ObjLoadResult loadObj(const std::wstring& widePath) {
     std::vector<tinyobj::material_t> mats;
     std::string err;
 
-    WideMaterialReader matReader(dirOf(widePath));
+    PathMaterialReader matReader(path.parent_path());
     bool ok = tinyobj::LoadObj(&attrib, &shapes, &mats, &err,
                                &objStream, &matReader, /*triangulate*/ true);
     if (!ok) {
@@ -116,10 +98,7 @@ ObjLoadResult loadObj(const std::wstring& widePath) {
     }
 
     Scene& scene = result.scene;
-    {
-        std::wstring fname = widePath.substr(dirOf(widePath).size());
-        scene.name = wideToUtf8(fname);
-    }
+    scene.name = platform::toUtf8(path.filename());
 
     // Map materials (+ a trailing default for faces with material_id == -1).
     for (auto& m : mats)

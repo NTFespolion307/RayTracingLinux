@@ -15,7 +15,7 @@ TEST_CASE("requiredBytes handles gigapixel sizes without overflow") {
 TEST_CASE("create maps a writable RGBA8 image of the right size") {
     TempDir dir("mmap");
     MmapImage img;
-    REQUIRE(img.create(dir.path().wstring(), 37, 19));
+    REQUIRE(img.create(dir.path(), 37, 19));
     CHECK(img.valid());
     CHECK(img.width() == 37);
     CHECK(img.height() == 19);
@@ -33,7 +33,7 @@ TEST_CASE("create maps a writable RGBA8 image of the right size") {
 TEST_CASE("scratch file lives in the folder while open and is deleted on destroy") {
     TempDir dir("mmap");
     MmapImage img;
-    REQUIRE(img.create(dir.path().wstring(), 16, 8));
+    REQUIRE(img.create(dir.path(), 16, 8));
 
     fs::path p = img.path();
     CHECK(p.parent_path() == dir.path());
@@ -54,7 +54,7 @@ TEST_CASE("destructor also deletes the scratch file") {
     fs::path p;
     {
         MmapImage img;
-        REQUIRE(img.create(dir.path().wstring(), 4, 4));
+        REQUIRE(img.create(dir.path(), 4, 4));
         p = img.path();
         CHECK(fs::exists(p));
     }
@@ -64,10 +64,10 @@ TEST_CASE("destructor also deletes the scratch file") {
 TEST_CASE("re-creating replaces the previous scratch file") {
     TempDir dir("mmap");
     MmapImage img;
-    REQUIRE(img.create(dir.path().wstring(), 4, 4));
+    REQUIRE(img.create(dir.path(), 4, 4));
     fs::path first = img.path();
-    REQUIRE(img.create(dir.path().wstring(), 8, 2));
-    CHECK(img.path() != first.wstring());
+    REQUIRE(img.create(dir.path(), 8, 2));
+    CHECK(img.path() != first);
     CHECK_FALSE(fs::exists(first));
     CHECK(img.width() == 8);
     CHECK(img.height() == 2);
@@ -76,7 +76,7 @@ TEST_CASE("re-creating replaces the previous scratch file") {
 TEST_CASE("create fails cleanly in a folder that does not exist") {
     TempDir dir("mmap");
     MmapImage img;
-    CHECK_FALSE(img.create((dir.path() / "does_not_exist").wstring(), 4, 4));
+    CHECK_FALSE(img.create((dir.path() / "does_not_exist"), 4, 4));
     CHECK_FALSE(img.valid());
     CHECK(img.width() == 0);
     CHECK(img.height() == 0);
@@ -84,13 +84,13 @@ TEST_CASE("create fails cleanly in a folder that does not exist") {
 
 TEST_CASE("resolveFolder and freeSpace") {
     TempDir dir("mmap");
-    CHECK(fs::path(MmapImage::resolveFolder(dir.path().wstring())) == dir.path());
+    CHECK(fs::path(MmapImage::resolveFolder(dir.path())) == dir.path());
 
-    fs::path def = MmapImage::resolveFolder(L"");
+    fs::path def = MmapImage::resolveFolder({});
     CHECK_FALSE(def.empty());
     CHECK(fs::is_directory(def));
 
     uint64_t freeBytes = 0;
-    CHECK(MmapImage::freeSpace(dir.path().wstring(), freeBytes));
+    CHECK(MmapImage::freeSpace(dir.path(), freeBytes));
     CHECK(freeBytes > 0);
 }

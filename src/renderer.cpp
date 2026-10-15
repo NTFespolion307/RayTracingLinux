@@ -401,7 +401,7 @@ static double dispatchBatch(VkContext& ctx, VkCommandBuffer cmd, VkFence fence,
 // Final render: tile scheduler
 // ---------------------------------------------------------------------------
 bool Renderer::startFinalRender(const Scene& scene, const RenderSettings& s,
-                                std::wstring& errMsg, uint64_t& requiredBytes) {
+                                std::string& errMsg, uint64_t& requiredBytes) {
     if (finalRunning_.load()) return true;
     if (worker_.joinable()) worker_.join();
 
@@ -411,11 +411,11 @@ bool Renderer::startFinalRender(const Scene& scene, const RenderSettings& s,
 
     uint64_t freeBytes = 0;
     if (MmapImage::freeSpace(s.scratchFolder, freeBytes) && freeBytes < requiredBytes) {
-        errMsg = L"Insufficient scratch disk space.";
+        errMsg = "Insufficient scratch disk space.";
         return false;
     }
     if (!image_.create(s.scratchFolder, w, h)) {
-        errMsg = L"Could not create the scratch file (disk full or path invalid).";
+        errMsg = "Could not create the scratch file (disk full or path invalid).";
         return false;
     }
     // Initialize the file to black so unrendered tiles are black.

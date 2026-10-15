@@ -77,13 +77,13 @@ void checkMaterialsFixture(const ObjLoadResult& r) {
 } // namespace
 
 TEST_CASE("materials fixture maps every MTL material kind") {
-    ObjLoadResult r = loadObj(dataFile("materials.obj").wstring());
+    ObjLoadResult r = loadObj(dataFile("materials.obj"));
     checkMaterialsFixture(r);
     CHECK(r.scene.name == "materials.obj");
 }
 
 TEST_CASE("OBJ without normals gets smoothed face normals") {
-    ObjLoadResult r = loadObj(dataFile("nonormals.obj").wstring());
+    ObjLoadResult r = loadObj(dataFile("nonormals.obj"));
     REQUIRE(r.ok);
     CHECK(r.scene.triangles.size() == 2);
     CHECK(r.scene.vertices.size() == 4);
@@ -94,7 +94,7 @@ TEST_CASE("OBJ without normals gets smoothed face normals") {
 }
 
 TEST_CASE("missing MTL is not fatal") {
-    ObjLoadResult r = loadObj(dataFile("missing_mtl.obj").wstring());
+    ObjLoadResult r = loadObj(dataFile("missing_mtl.obj"));
     REQUIRE(r.ok);
     REQUIRE(r.scene.triangles.size() == 1);
     REQUIRE(r.scene.materials.size() == 1);
@@ -102,13 +102,13 @@ TEST_CASE("missing MTL is not fatal") {
 }
 
 TEST_CASE("nonexistent OBJ reports an error") {
-    ObjLoadResult r = loadObj((fs::path(VKGT_TEST_DATA_DIR) / "nope.obj").wstring());
+    ObjLoadResult r = loadObj((fs::path(VKGT_TEST_DATA_DIR) / "nope.obj"));
     CHECK_FALSE(r.ok);
     CHECK(r.message == "Could not open the OBJ file.");
 }
 
 TEST_CASE("OBJ with no faces reports an error") {
-    ObjLoadResult r = loadObj(dataFile("empty.obj").wstring());
+    ObjLoadResult r = loadObj(dataFile("empty.obj"));
     CHECK_FALSE(r.ok);
     CHECK(r.message == "The OBJ contained no triangles.");
 }
@@ -120,6 +120,6 @@ TEST_CASE("OBJ and MTL load from a non-ASCII directory") {
     fs::copy_file(dataFile("materials.obj"), dir / "materials.obj");
     fs::copy_file(dataFile("materials.mtl"), dir / "materials.mtl");
 
-    ObjLoadResult r = loadObj((dir / "materials.obj").wstring());
+    ObjLoadResult r = loadObj((dir / "materials.obj"));
     checkMaterialsFixture(r);
 }

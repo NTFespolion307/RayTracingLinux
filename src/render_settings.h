@@ -2,6 +2,7 @@
 // RenderSettings struct shared across the UI and renderer.
 #pragma once
 #include <cstdint>
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -54,7 +55,7 @@ struct RenderSettings {
     float    skyIntensity    = 1.0f;
     Backend  backend         = Backend::Auto;
     int      tileSize        = 256;        // 128 / 256 / 512
-    std::wstring scratchFolder;            // empty => use system temp
+    std::filesystem::path scratchFolder;   // empty => use the default scratch dir
 
     uint32_t width()  const { return kResolutions[resolutionIndex].width; }
     uint32_t height() const { return kResolutions[resolutionIndex].height; }

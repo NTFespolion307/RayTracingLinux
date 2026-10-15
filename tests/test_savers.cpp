@@ -106,7 +106,7 @@ struct PatternImage {
     TempDir scratch{ "savers_scratch" };
     MmapImage img;
     PatternImage(uint32_t w = kW, uint32_t h = kH) {
-        REQUIRE(img.create(scratch.path().wstring(), w, h));
+        REQUIRE(img.create(scratch.path(), w, h));
         fillPattern(img);
     }
 };
@@ -118,7 +118,7 @@ TEST_CASE("PPM output is byte-exact P6") {
     TempDir out("savers");
     fs::path p = out.path() / "out.ppm";
     SaveProgress sp;
-    REQUIRE(savePPM(src.img, p.wstring(), sp));
+    REQUIRE(savePPM(src.img, p, sp));
     CHECK(sp.progress.load() == 1.0f);
 
     std::string header = "P6\n37 19\n255\n";
@@ -133,7 +133,7 @@ TEST_CASE("PNG round-trips losslessly") {
     TempDir out("savers");
     fs::path p = out.path() / "out.png";
     SaveProgress sp;
-    REQUIRE(savePNG(src.img, p.wstring(), sp));
+    REQUIRE(savePNG(src.img, p, sp));
     CHECK(sp.progress.load() == 1.0f);
 
     uint32_t w = 0, h = 0;
@@ -149,7 +149,7 @@ TEST_CASE("JPEG has the right size and stays close to the source") {
     TempDir out("savers");
     fs::path p = out.path() / "out.jpg";
     SaveProgress sp;
-    REQUIRE(saveJPEG(src.img, p.wstring(), 95, sp));
+    REQUIRE(saveJPEG(src.img, p, 95, sp));
     CHECK(sp.progress.load() == 1.0f);
 
     uint32_t w = 0, h = 0;
@@ -174,7 +174,7 @@ TEST_CASE("JPEG refuses images wider than 65500 px and writes nothing") {
     TempDir out("savers");
     fs::path p = out.path() / "wide.jpg";
     SaveProgress sp;
-    CHECK_FALSE(saveJPEG(src.img, p.wstring(), 90, sp));
+    CHECK_FALSE(saveJPEG(src.img, p, 90, sp));
     CHECK_FALSE(sp.message.empty());
     CHECK_FALSE(fs::exists(p));
 }
@@ -189,7 +189,7 @@ TEST_CASE("cancel before the first row returns false and deletes the partial fil
         fs::path p = out.path() / names[i];
         SaveProgress sp;
         sp.cancel.store(true);
-        CHECK_FALSE(saveImage(src.img, p.wstring(), formats[i], 90, sp));
+        CHECK_FALSE(saveImage(src.img, p, formats[i], 90, sp));
         CHECK(sp.message == "Save cancelled.");
         CHECK(sp.done.load());
         CHECK_FALSE(sp.success.load());
@@ -204,7 +204,7 @@ TEST_CASE("unwritable destination fails with a message") {
     for (SaveFormat f : formats) {
         fs::path p = out.path() / "no_such_dir" / "x.out";
         SaveProgress sp;
-        CHECK_FALSE(saveImage(src.img, p.wstring(), f, 90, sp));
+        CHECK_FALSE(saveImage(src.img, p, f, 90, sp));
         CHECK_FALSE(sp.message.empty());
         CHECK(sp.done.load());
         CHECK_FALSE(sp.success.load());
@@ -216,7 +216,7 @@ TEST_CASE("saveImage reports success and non-ASCII file names work") {
     TempDir out("savers");
     fs::path p = out.path() / fs::path(u8"tëst_日本.ppm");
     SaveProgress sp;
-    CHECK(saveImage(src.img, p.wstring(), SaveFormat::PPM, 90, sp));
+    CHECK(saveImage(src.img, p, SaveFormat::PPM, 90, sp));
     CHECK(sp.done.load());
     CHECK(sp.success.load());
     CHECK(fs::exists(p));

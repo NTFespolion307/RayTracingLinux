@@ -37,7 +37,7 @@ public:
     // Allocates the scratch mmap and starts the worker. Returns false (with
     // errMsg + requiredBytes) only for insufficient disk space.
     bool startFinalRender(const Scene& scene, const RenderSettings& s,
-                          std::wstring& errMsg, uint64_t& requiredBytes);
+                          std::string& errMsg, uint64_t& requiredBytes);
     void cancelFinal();
     bool finalRunning() const { return finalRunning_.load(); }
     MmapImage& finalImage() { return image_; }

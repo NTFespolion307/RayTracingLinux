@@ -1,18 +1,19 @@
 #include "mmap_image.h"
 #include <chrono>
+#include <cstdio>
 
 MmapImage::~MmapImage() { destroy(); }
 
-std::wstring MmapImage::resolveFolder(const std::wstring& folder) {
+std::filesystem::path MmapImage::resolveFolder(const std::filesystem::path& folder) {
     if (!folder.empty()) return folder;
     wchar_t buf[MAX_PATH];
     DWORD n = GetTempPathW(MAX_PATH, buf);
-    if (n == 0 || n > MAX_PATH) return L".";
-    return std::wstring(buf);
+    if (n == 0 || n > MAX_PATH) return ".";
+    return std::filesystem::path(buf);
 }
 
-bool MmapImage::freeSpace(const std::wstring& folder, uint64_t& freeBytes) {
-    std::wstring dir = resolveFolder(folder);
+bool MmapImage::freeSpace(const std::filesystem::path& folder, uint64_t& freeBytes) {
+    std::filesystem::path dir = resolveFolder(folder);
     ULARGE_INTEGER freeForCaller{}, total{}, totalFree{};
     if (!GetDiskFreeSpaceExW(dir.c_str(), &freeForCaller, &total, &totalFree))
         return false;
@@ -20,21 +21,17 @@ bool MmapImage::freeSpace(const std::wstring& folder, uint64_t& freeBytes) {
     return true;
 }
 
-bool MmapImage::create(const std::wstring& folder, uint32_t width, uint32_t height) {
+bool MmapImage::create(const std::filesystem::path& folder, uint32_t width, uint32_t height) {
     destroy();
     width_ = width;
     height_ = height;
 
-    std::wstring dir = resolveFolder(folder);
-    if (!dir.empty() && dir.back() != L'\\' && dir.back() != L'/')
-        dir += L'\\';
-
     // Unique scratch filename so concurrent runs don't collide.
     auto now = std::chrono::steady_clock::now().time_since_epoch().count();
-    wchar_t name[64];
-    swprintf(name, 64, L"VkGigaTracer_%08X_%08X.scratch",
-             (unsigned)(now & 0xFFFFFFFF), GetCurrentProcessId());
-    path_ = dir + name;
+    char name[64];
+    std::snprintf(name, sizeof(name), "VkGigaTracer_%08X_%08X.scratch",
+                  (unsigned)(now & 0xFFFFFFFF), (unsigned)GetCurrentProcessId());
+    path_ = resolveFolder(folder) / name;
 
     file_ = CreateFileW(path_.c_str(), GENERIC_READ | GENERIC_WRITE,
                         0, nullptr, CREATE_ALWAYS,
