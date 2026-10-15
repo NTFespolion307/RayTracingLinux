@@ -2,10 +2,11 @@
 
 Status: plan approved 2026-10-15. **Steps 1–11 done.**
 - Windows: builds, 42/42 tests pass.
-- Linux (WSL distro `RayTracing`, Ubuntu 26.04, GCC 15): builds, 40/40 unit tests + 2/2 GPU tests pass under Xvfb with Mesa lavapipe, and the GUI starts. lavapipe exposes `VK_KHR_ray_query`, so the hardware ray-query backend was exercised for the first time; its image matches the Windows compute-path reference (MAE 0.000).
+- Linux (WSL distro `RayTracing`, **Ubuntu 22.04**, GCC 11.4): builds, 40/40 unit tests + 2/2 GPU tests pass under Xvfb with Mesa lavapipe (compute path), and the GUI starts. The binary needs only libc/libm, at most **GLIBC_2.34**.
+- Also verified earlier on Ubuntu 26.04 / GCC 15, where lavapipe exposes `VK_KHR_ray_query`: the hardware ray-query backend ran for the first time and matched the Windows compute-path reference (MAE 0.000).
 - Still to do on Linux: native file dialogs and message boxes (step 12; they currently act as "cancelled" / print to stderr), then steps 13–17.
 
-Build host note: the WSL distro is Ubuntu **26.04**, not 24.04 as assumed in §0. A binary built there needs a glibc at least that new, so a release tarball meant for 24.04 users must be built on 24.04 (step 17).
+Build host note: the target is now **Ubuntu 22.04 and newer** (decided 2026-10-15). A Linux binary runs only on systems whose glibc is at least as new as the build machine's, so releases are built on 22.04 (glibc 2.35). The `RayTracing` WSL distro was recreated as 22.04 for this, and serves as both development and release build host.
 
 Run the Linux build and tests (inside WSL, distro `RayTracing`): see Appendix A; the build tree lives in `~/vkgt`, outside the Windows checkout.
 
@@ -24,7 +25,7 @@ Run the tests (from the repo root, after building): `ctest --test-dir build -C R
 | UI | **Dear ImGui 1.91.5** with GLFW + Vulkan backends (already cross-platform) |
 | Image I/O | zlib, libpng, libjpeg-turbo, tinyobjloader (all portable) |
 | Windows-specific | entry point, DPI, COM file dialogs, `MessageBoxA`, memory-mapped scratch file, wide-char paths and MSVC CRT calls, the Vulkan surface extension name, and parts of the CMake build |
-| Linux target (inferred) | Ubuntu 24.04 x86_64. WSL2 Ubuntu-24.04 is installed on this machine and can serve as the first Linux build host |
+| Linux target | Ubuntu 22.04+ x86_64, X11 (originally assumed 24.04; changed 2026-10-15, see §7 Q3). Built in the WSL distro `RayTracing` |
 
 The template's context placeholders were not filled in, so the values above come from the code. Correct them in §7 if they're wrong.
 
@@ -211,14 +212,14 @@ Every step ends with: **Windows build passes and all tests pass**. From step 9 o
 6. **CRT portability (P2–P7, P11).** *Verify:* tests green.
 7. **Vulkan surface extensions (V1–V3).** *Verify:* tests green; validation-layer run (Debug) is clean.
 8. **Split `MmapImage` into `_win32` and `_posix` files (M1).** Move the Win32 code verbatim, and use `fs::space`/`temp_directory_path` (M2, M3). *Verify:* MmapImage tests green on Windows.
-9. **First Linux build in WSL.** Write `platform_posix.cpp` and `mmap_image_posix.cpp`, using stubbed dialogs (return empty) and stderr messages, and fix GCC errors such as the missing includes from P12. *Verify:* builds on Ubuntu 24.04 with GCC; CPU unit tests green on Linux.
+9. **First Linux build in WSL** (done on Ubuntu 22.04 and 26.04). Write `platform_posix.cpp` and `mmap_image_posix.cpp`, using stubbed dialogs (return empty) and stderr messages, and fix GCC errors such as the missing includes from P12. *Verify:* builds on Ubuntu 24.04 with GCC; CPU unit tests green on Linux.
 10. **Linux self-test.** Run `--selftest` under Xvfb with lavapipe and compare to the golden image within tolerance. *Verify:* golden test green on Linux.
 11. **Fonts and log location (R3, R4, R2 fallback).** *Verify:* Roboto loads from `build/fonts/` on Linux; log written.
 12. **Linux dialogs and message boxes (S6, S8)** using the chosen library and ImGui fallback. *Verify:* manual open, save, and folder pick in WSLg.
 13. **OBJ `mtllib` normalization (P10).** *Verify:* new test with a `Textures\Foo.MTL` reference passes on both OSes.
 14. **HiDPI (V4) and composite alpha (V5).** *Verify:* visual check on Windows at 100% and 150%, on X11, and on Wayland at scale 2.
 15. **Docs:** README Linux section; generalize the TDR and DLL wording.
-16. *(Optional, Q6)* **CI:** GitHub Actions matrix (`windows-latest` and `ubuntu-24.04`) running build, unit tests, and the self-test (Xvfb + lavapipe on Linux).
+16. *(Optional, Q6)* **CI:** GitHub Actions matrix (`windows-latest` and `ubuntu-22.04`, so release binaries keep running on 22.04+) running build, unit tests, and the self-test (Xvfb + lavapipe on Linux).
 17. *(Optional, Q3)* **Packaging:** AppImage or tarball.
 
 ---
@@ -266,7 +267,7 @@ Added later, alongside the code they cover:
 |---|---|---|
 | Q1 | **X11 only for now**; Wayland later | Build GLFW with `GLFW_BUILD_WAYLAND=OFF` (fewer build deps). On Wayland desktops the app runs through XWayland. V4 (HiDPI double-scaling) drops to minor/deferred because X11 reports scale like Windows does. V5 is deferred |
 | Q2 | **portable-file-dialogs** on Linux | Runtime needs `zenity` or `kdialog`; ImGui path-box fallback when neither is present |
-| Q3 | **.tar.gz single binary** (exe + `fonts/`) | Static libstdc++/libgcc; built on Ubuntu 24.04 (glibc 2.39 minimum); needs `libvulkan1` at runtime. Step 17 becomes a tarball script |
+| Q3 | **.tar.gz single binary** (exe + `fonts/`), **runs on Ubuntu 22.04+** | Static libstdc++/libgcc; built on Ubuntu 22.04 (binary needs GLIBC_2.34+: Ubuntu 22.04+, Debian 12+, Fedora 35+, RHEL 9); needs `libvulkan1` at runtime. Step 17 becomes a tarball script; CI (step 16) must build releases on 22.04 |
 | Q4 | Runtime files live **next to the executable**; scratch defaults to **`<exe dir>/temp/`** | Applies to **both Windows and Linux** (Windows changes from `%TEMP%`). If `<exe dir>/temp/` can't be created or written, fall back to the system temp dir (`%TEMP%` / `/var/tmp`). Replaces M2's `/var/tmp` default and R2's XDG fallback, and avoids tmpfs automatically. Add tests: default resolves to `<exe dir>/temp`; read-only exe dir falls back |
 | Q5 | New repo **https://github.com/NTFespolion307/RayTracingLinux.git** (empty) for the cross-platform version | Add as a second remote; pushing only with explicit go-ahead |
 | Q6 | **Xvfb** for the headless Linux self-test | No change to device selection. CI runs `xvfb-run ./VkGigaTracer --selftest` with lavapipe |
@@ -291,9 +292,12 @@ Added later, alongside the code they cover:
 
 ## Appendix A. Linux build and test (WSL distro `RayTracing`)
 
-The distro already has the packages installed (`build-essential cmake
+The distro (Ubuntu 22.04) already has the packages installed (`build-essential
 ninja-build pkg-config xorg-dev libxkbcommon-dev libvulkan1 mesa-vulkan-drivers
-vulkan-tools xvfb zenity`). Run every command inside WSL.
+vulkan-tools xvfb xauth zenity python3-pip`). Ubuntu 22.04's own CMake is 3.22,
+older than the 3.24 this project needs, so a current CMake is installed per-user
+with `python3 -m pip install --user cmake` (into `~/.local/bin`, which is on
+`PATH` in login shells). Run every command inside WSL.
 
 1. In a Windows terminal, open the distro: `wsl -d RayTracing`. Success: a `raytracing@…$` prompt.
 2. Configure (any directory): `cmake -S /mnt/c/Users/Admin/Documents/Code/RayTracing -B ~/vkgt/build -G Ninja -DCMAKE_BUILD_TYPE=Release -DFETCHCONTENT_BASE_DIR=$HOME/vkgt/deps`. Success: ends with `Build files have been written to: /home/raytracing/vkgt/build`.

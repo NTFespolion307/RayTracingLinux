@@ -10,7 +10,7 @@ build produces a **single self-contained `VkGigaTracer.exe`** that runs on a cle
 Windows machine whose only relevant software is a GPU driver.
 
 > **Linux port in progress.** The code base is being made to build and run
-> natively on Linux (Ubuntu 24.04, X11) while staying fully working on Windows.
+> natively on Linux (Ubuntu 22.04 and newer, X11) while staying fully working on Windows.
 > All OS-specific code now sits behind a small platform layer, and a test suite
 > locks in current behavior. The Linux build compiles, passes the full test
 > suite (including the rendered-image check) and opens the UI; native file
