@@ -111,4 +111,12 @@ std::filesystem::path exeDir() {
     return std::filesystem::path(buf).parent_path();
 }
 
+FILE* openFile(const std::filesystem::path& path, const char* mode) {
+    return _wfopen(path.c_str(), utf8ToWide(mode).c_str());
+}
+
+bool localTime(std::time_t t, std::tm& out) {
+    return localtime_s(&out, &t) == 0;
+}
+
 } // namespace platform

@@ -3,6 +3,8 @@
 // Implemented in platform_win32.cpp (Windows) and platform_posix.cpp (Linux).
 // All strings crossing this interface are UTF-8; paths are std::filesystem.
 #pragma once
+#include <cstdio>
+#include <ctime>
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -31,6 +33,12 @@ std::filesystem::path pickFolderDialog();
 
 // Directory containing the running executable.
 std::filesystem::path exeDir();
+
+// fopen() for any path, including non-ASCII ones (Windows needs _wfopen).
+FILE* openFile(const std::filesystem::path& path, const char* mode);
+
+// Thread-safe localtime(). Returns false on failure.
+bool localTime(std::time_t t, std::tm& out);
 
 // UTF-8 <-> path conversions (lossless on every platform).
 inline std::string toUtf8(const std::filesystem::path& p) {

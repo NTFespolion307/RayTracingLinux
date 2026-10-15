@@ -81,9 +81,8 @@ namespace {
 // never trip ImGui's internal assert. Returns nullptr on any failure.
 ImFont* tryLoadTTF(ImGuiIO& io, const char* path, float sizePx) {
     if (!path || !path[0]) return nullptr;
-    FILE* f = nullptr;
-    if (fopen_s(&f, path, "rb") != 0 || !f) return nullptr;
-    fclose(f);
+    std::error_code ec;
+    if (!std::filesystem::is_regular_file(platform::fromUtf8(path), ec)) return nullptr;
     ImFontConfig cfg;
     cfg.OversampleH = 3;   // crisper horizontal stems
     cfg.OversampleV = 1;

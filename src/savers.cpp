@@ -1,5 +1,6 @@
 #include "savers.h"
 #include "render_settings.h"
+#include "platform.h"
 #include <cstdio>
 #include <vector>
 #include <csetjmp>
@@ -11,8 +12,8 @@ extern "C" {
 
 namespace {
 
-FILE* wfopenWrite(const std::filesystem::path& path) {
-    return _wfopen(path.c_str(), L"wb");
+FILE* openWrite(const std::filesystem::path& path) {
+    return platform::openFile(path, "wb");
 }
 
 // Convert one RGBA row (from the mapping) to a tightly packed RGB row.
@@ -24,7 +25,10 @@ inline void rgbaToRgb(const uint8_t* src, uint8_t* dst, uint32_t width) {
     }
 }
 
-void deletePartial(const std::filesystem::path& path) { _wremove(path.c_str()); }
+void deletePartial(const std::filesystem::path& path) {
+    std::error_code ec;
+    std::filesystem::remove(path, ec);
+}
 
 } // namespace
 
@@ -32,7 +36,7 @@ void deletePartial(const std::filesystem::path& path) { _wremove(path.c_str()); 
 // PNG
 // ---------------------------------------------------------------------------
 bool savePNG(const MmapImage& img, const std::filesystem::path& path, SaveProgress& p) {
-    FILE* fp = wfopenWrite(path);
+    FILE* fp = openWrite(path);
     if (!fp) { p.message = "Could not create the PNG file."; return false; }
 
     png_structp png = png_create_write_struct(PNG_LIBPNG_VER_STRING, nullptr, nullptr, nullptr);
@@ -94,7 +98,7 @@ bool saveJPEG(const MmapImage& img, const std::filesystem::path& path, int quali
         p.message = "JPEG cannot exceed 65500 px per side at this resolution.";
         return false;
     }
-    FILE* fp = wfopenWrite(path);
+    FILE* fp = openWrite(path);
     if (!fp) { p.message = "Could not create the JPEG file."; return false; }
 
     jpeg_compress_struct cinfo;
@@ -147,7 +151,7 @@ bool saveJPEG(const MmapImage& img, const std::filesystem::path& path, int quali
 // PPM (P6 binary) - GIMP opens this natively with no import dialog.
 // ---------------------------------------------------------------------------
 bool savePPM(const MmapImage& img, const std::filesystem::path& path, SaveProgress& p) {
-    FILE* fp = wfopenWrite(path);
+    FILE* fp = openWrite(path);
     if (!fp) { p.message = "Could not create the PPM file."; return false; }
 
     std::fprintf(fp, "P6\n%u %u\n255\n", img.width(), img.height());

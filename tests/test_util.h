@@ -1,6 +1,7 @@
 // test_util.h - small helpers shared by the unit tests: per-test scratch
 // directories and FILE* opening that works for non-ASCII paths on Windows.
 #pragma once
+#include "platform.h"
 #include <cstdio>
 #include <filesystem>
 #include <string>
@@ -36,12 +37,7 @@ private:
 };
 
 inline FILE* openFile(const fs::path& p, const char* mode) {
-#ifdef _WIN32
-    std::wstring wmode(mode, mode + std::char_traits<char>::length(mode));
-    return _wfopen(p.c_str(), wmode.c_str());
-#else
-    return std::fopen(p.c_str(), mode);
-#endif
+    return platform::openFile(p, mode);
 }
 
 } // namespace testutil

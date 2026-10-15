@@ -1,6 +1,5 @@
 #include "vk_context.h"
 #include "platform.h"
-#include <windows.h>
 #include <cstdio>
 #include <cstring>
 #include <mutex>
@@ -19,12 +18,12 @@ std::filesystem::path logPath() {
 
 void vkLog(const std::string& msg) {
     std::lock_guard<std::mutex> lock(g_logMutex);
-    FILE* f = _wfopen(logPath().c_str(), L"a");
+    FILE* f = platform::openFile(logPath(), "a");
     if (!f) return;
     std::time_t t = std::time(nullptr);
     std::tm tmv{};
     char ts[32] = "??:??:??";
-    if (localtime_s(&tmv, &t) == 0)
+    if (platform::localTime(t, tmv))
         std::strftime(ts, sizeof(ts), "%H:%M:%S", &tmv);
     std::fprintf(f, "[%s] %s\n", ts, msg.c_str());
     std::fclose(f);

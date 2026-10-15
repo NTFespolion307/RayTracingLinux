@@ -11,10 +11,11 @@
 
 #include "platform.h"
 
-#include <windows.h>
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <thread>
 
 // ---------------------------------------------------------------------------
 // Small helpers
@@ -895,7 +896,8 @@ int App::runSelfTest() {
         vkLog("selftest: startFinalRender failed");
         return 1;
     }
-    while (renderer_.finalRunning()) Sleep(100);
+    while (renderer_.finalRunning())
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
     Renderer::Progress pr = renderer_.progress();
     char buf[160];
