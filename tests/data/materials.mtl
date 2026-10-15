@@ -1,0 +1,18 @@
+# One material of each kind the loader maps (see mapMaterial in obj_loader.cpp).
+newmtl matLambert
+Kd 0.5 0.25 0.125
+
+newmtl matMetal
+Kd 0.1 0.1 0.1
+Ks 0.9 0.8 0.7
+Ns 100
+illum 3
+
+newmtl matGlass
+Kd 0.9 0.95 1.0
+Ni 1.5
+d 0.5
+
+newmtl matLight
+Kd 0 0 0
+Ke 5 4 3

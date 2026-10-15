@@ -308,3 +308,69 @@ add_custom_command(TARGET VkGigaTracer POST_BUILD
             "${CMAKE_SOURCE_DIR}/fonts"
             "$<TARGET_FILE_DIR:VkGigaTracer>/fonts"
     COMMENT "Copying bundled UI fonts")
+
+# ---------------------------------------------------------------------------
+# Tests (doctest unit tests + golden-image self-test). Run with:
+#   ctest --test-dir build -C Release --output-on-failure
+# Tests labelled "gpu" need a Vulkan device; skip them with -LE gpu.
+# ---------------------------------------------------------------------------
+option(VKGT_BUILD_TESTS "Build the VkGigaTracer test suite" ON)
+if(VKGT_BUILD_TESTS)
+    enable_testing()
+
+    FetchContent_Declare(doctest
+        GIT_REPOSITORY https://github.com/doctest/doctest.git
+        GIT_TAG        v2.4.11
+        GIT_SHALLOW    TRUE)
+    FetchContent_GetProperties(doctest)
+    if(NOT doctest_POPULATED)
+        FetchContent_Populate(doctest)
+    endif()
+
+    # CPU-only unit tests: compile the app sources that don't need Vulkan.
+    add_executable(VkGigaTracerTests
+        tests/test_main.cpp
+        tests/test_render_settings.cpp
+        tests/test_mmap_image.cpp
+        tests/test_savers.cpp
+        tests/test_obj_loader.cpp
+        tests/test_scene.cpp
+        tests/test_bvh.cpp
+        tests/test_gpu_layout.cpp
+        src/mmap_image.cpp
+        src/savers.cpp
+        src/obj_loader.cpp
+        src/scene.cpp
+        src/bvh.cpp)
+    add_dependencies(VkGigaTracerTests jpegturbo_ext)
+    target_include_directories(VkGigaTracerTests PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+        ${CMAKE_SOURCE_DIR}/tests
+        ${doctest_SOURCE_DIR}
+        ${tinyobjloader_SOURCE_DIR}
+        ${ZLIB_INCLUDE_DIRS})
+    target_compile_definitions(VkGigaTracerTests PRIVATE
+        VKGT_TEST_DATA_DIR="${CMAKE_SOURCE_DIR}/tests/data"
+        DOCTEST_CONFIG_USE_STD_HEADERS)  # avoid std:: forward decls (MSVC C5285)
+    target_link_libraries(VkGigaTracerTests PRIVATE png_static zlibstatic jpegturbo)
+
+    include(${doctest_SOURCE_DIR}/scripts/cmake/doctest.cmake)
+    doctest_discover_tests(VkGigaTracerTests)
+
+    # Golden-image comparison tool for the --selftest render.
+    add_executable(ppm_compare tests/tools/ppm_compare.cpp)
+    target_link_libraries(ppm_compare PRIVATE png_static zlibstatic)
+
+    set(SELFTEST_DIR "${CMAKE_BINARY_DIR}/selftest_run")
+    file(MAKE_DIRECTORY ${SELFTEST_DIR})
+    add_test(NAME selftest_render
+             COMMAND VkGigaTracer --selftest
+             WORKING_DIRECTORY ${SELFTEST_DIR})
+    add_test(NAME selftest_golden
+             COMMAND ppm_compare ${SELFTEST_DIR}/selftest_out.ppm
+                     ${CMAKE_SOURCE_DIR}/tests/golden/selftest_1080p_16spp.png)
+    set_tests_properties(selftest_render PROPERTIES
+        LABELS gpu TIMEOUT 600 FIXTURES_SETUP selftest)
+    set_tests_properties(selftest_golden PROPERTIES
+        LABELS gpu FIXTURES_REQUIRED selftest)
+endif()

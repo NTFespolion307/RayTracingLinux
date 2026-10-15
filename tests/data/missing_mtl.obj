@@ -1,0 +1,7 @@
+# References an MTL that does not exist; must still load with defaults.
+mtllib missing.mtl
+v 0 0 0
+v 1 0 0
+v 0 1 0
+usemtl nothere
+f 1 2 3

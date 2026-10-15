@@ -25,3 +25,6 @@ selftest_out.*
 # OS cruft
 Thumbs.db
 desktop.ini
+
+# Golden reference images for tests
+!tests/golden/*.png

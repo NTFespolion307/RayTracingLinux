@@ -1,0 +1,35 @@
+# Four unit quads (one per material) plus one triangle with no material.
+mtllib materials.mtl
+
+v 0 0 0
+v 1 0 0
+v 1 1 0
+v 0 1 0
+v 2 0 0
+v 3 0 0
+v 3 1 0
+v 2 1 0
+v 4 0 0
+v 5 0 0
+v 5 1 0
+v 4 1 0
+v 6 0 0
+v 7 0 0
+v 7 1 0
+v 6 1 0
+v 0 3 0
+v 1 3 0
+v 0 4 0
+vn 0 0 1
+
+# Face before any usemtl -> default material.
+f 17//1 18//1 19//1
+
+usemtl matLambert
+f 1//1 2//1 3//1 4//1
+usemtl matMetal
+f 5//1 6//1 7//1 8//1
+usemtl matGlass
+f 9//1 10//1 11//1 12//1
+usemtl matLight
+f 13//1 14//1 15//1 16//1

@@ -1,0 +1,6 @@
+# A flat quad in the y=0 plane, wound counter-clockwise seen from +y, no normals.
+v 0 0 0
+v 0 0 1
+v 1 0 1
+v 1 0 0
+f 1 2 3 4
