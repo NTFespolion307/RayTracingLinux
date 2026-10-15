@@ -20,11 +20,25 @@ if(NOT DEFINED FETCHCONTENT_BASE_DIR)
     set(FETCHCONTENT_BASE_DIR "${CMAKE_SOURCE_DIR}/_deps_cache" CACHE PATH "")
 endif()
 
+# All Vulkan entry points come from volk, never from static prototypes.
+add_compile_definitions(VK_NO_PROTOTYPES)
+
+if(WIN32)
+    add_compile_definitions(_CRT_SECURE_NO_WARNINGS NOMINMAX WIN32_LEAN_AND_MEAN
+                            UNICODE _UNICODE VK_USE_PLATFORM_WIN32_KHR)
+endif()
+
 if(MSVC)
     add_compile_options(/MP /bigobj /utf-8 /EHsc /wd4244 /wd4267 /wd4305)
-    add_compile_definitions(_CRT_SECURE_NO_WARNINGS NOMINMAX WIN32_LEAN_AND_MEAN
-                            UNICODE _UNICODE VK_USE_PLATFORM_WIN32_KHR VK_NO_PROTOTYPES)
 endif()
+
+# Linux: GLFW is built for X11 only for now (Wayland support is planned later).
+if(UNIX AND NOT APPLE)
+    set(GLFW_BUILD_WAYLAND OFF CACHE BOOL "" FORCE)
+    set(GLFW_BUILD_X11     ON  CACHE BOOL "" FORCE)
+endif()
+
+find_package(Threads REQUIRED)
 
 include(FetchContent)
 
@@ -144,6 +158,24 @@ endif()
 
 include(ExternalProject)
 set(JPEG_BUILD_DIR "${CMAKE_BINARY_DIR}/jpegturbo-build")
+
+# libjpeg-turbo names its static library jpeg-static.lib under MSVC and
+# libjpeg.a elsewhere. Multi-config generators (Visual Studio) put it in a
+# per-config subfolder; single-config ones (Ninja/Make) don't.
+get_property(VKGT_MULTI_CONFIG GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
+if(MSVC)
+    set(JPEG_LIB_NAME "jpeg-static.lib")
+else()
+    set(JPEG_LIB_NAME "libjpeg.a")
+endif()
+if(VKGT_MULTI_CONFIG)
+    set(JPEG_LIB_BYPRODUCT "${JPEG_BUILD_DIR}/$<CONFIG>/${JPEG_LIB_NAME}")
+    set(JPEG_EXTRA_ARGS "")
+else()
+    set(JPEG_LIB_BYPRODUCT "${JPEG_BUILD_DIR}/${JPEG_LIB_NAME}")
+    set(JPEG_EXTRA_ARGS -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE})
+endif()
+
 ExternalProject_Add(jpegturbo_ext
     SOURCE_DIR       "${libjpegturbo_SOURCE_DIR}"
     BINARY_DIR       "${JPEG_BUILD_DIR}"
@@ -156,33 +188,45 @@ ExternalProject_Add(jpegturbo_ext
         -DWITH_TURBOJPEG=OFF
         -DCMAKE_MSVC_RUNTIME_LIBRARY=${CMAKE_MSVC_RUNTIME_LIBRARY}
         -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+        ${JPEG_EXTRA_ARGS}
     BUILD_COMMAND    ${CMAKE_COMMAND} --build <BINARY_DIR> --config $<CONFIG> --target jpeg-static
     INSTALL_COMMAND  ""
-    BUILD_BYPRODUCTS "${JPEG_BUILD_DIR}/$<CONFIG>/jpeg-static.lib")
+    BUILD_BYPRODUCTS "${JPEG_LIB_BYPRODUCT}")
 
-# Per-config imported locations (generator expressions are not expanded inside
-# IMPORTED_LOCATION on multi-config generators, so set each config explicitly).
 add_library(jpegturbo STATIC IMPORTED GLOBAL)
 set_target_properties(jpegturbo PROPERTIES
-    IMPORTED_CONFIGURATIONS "RELEASE;DEBUG;RELWITHDEBINFO;MINSIZEREL"
-    IMPORTED_LOCATION_RELEASE        "${JPEG_BUILD_DIR}/Release/jpeg-static.lib"
-    IMPORTED_LOCATION_DEBUG          "${JPEG_BUILD_DIR}/Debug/jpeg-static.lib"
-    IMPORTED_LOCATION_RELWITHDEBINFO "${JPEG_BUILD_DIR}/RelWithDebInfo/jpeg-static.lib"
-    IMPORTED_LOCATION_MINSIZEREL     "${JPEG_BUILD_DIR}/MinSizeRel/jpeg-static.lib"
-    MAP_IMPORTED_CONFIG_RELWITHDEBINFO "RELWITHDEBINFO;RELEASE"
-    MAP_IMPORTED_CONFIG_MINSIZEREL     "MINSIZEREL;RELEASE"
     INTERFACE_INCLUDE_DIRECTORIES "${libjpegturbo_SOURCE_DIR};${JPEG_BUILD_DIR}")
-
-# --- Embeddable Python (build-time only; glslang's code generators need it) ---
-# Fetched automatically so the build machine needs nothing but VS, CMake, net.
-FetchContent_Declare(pythonembed
-    URL https://www.python.org/ftp/python/3.12.7/python-3.12.7-embed-amd64.zip)
-FetchContent_GetProperties(pythonembed)
-if(NOT pythonembed_POPULATED)
-    FetchContent_Populate(pythonembed)
+if(VKGT_MULTI_CONFIG)
+    # Per-config imported locations (generator expressions are not expanded
+    # inside IMPORTED_LOCATION, so set each config explicitly).
+    set_target_properties(jpegturbo PROPERTIES
+        IMPORTED_CONFIGURATIONS "RELEASE;DEBUG;RELWITHDEBINFO;MINSIZEREL"
+        IMPORTED_LOCATION_RELEASE        "${JPEG_BUILD_DIR}/Release/${JPEG_LIB_NAME}"
+        IMPORTED_LOCATION_DEBUG          "${JPEG_BUILD_DIR}/Debug/${JPEG_LIB_NAME}"
+        IMPORTED_LOCATION_RELWITHDEBINFO "${JPEG_BUILD_DIR}/RelWithDebInfo/${JPEG_LIB_NAME}"
+        IMPORTED_LOCATION_MINSIZEREL     "${JPEG_BUILD_DIR}/MinSizeRel/${JPEG_LIB_NAME}"
+        MAP_IMPORTED_CONFIG_RELWITHDEBINFO "RELWITHDEBINFO;RELEASE"
+        MAP_IMPORTED_CONFIG_MINSIZEREL     "MINSIZEREL;RELEASE")
+else()
+    set_target_properties(jpegturbo PROPERTIES
+        IMPORTED_LOCATION "${JPEG_BUILD_DIR}/${JPEG_LIB_NAME}")
 endif()
-set(Python3_EXECUTABLE "${pythonembed_SOURCE_DIR}/python.exe" CACHE FILEPATH "" FORCE)
-set(Python_EXECUTABLE  "${pythonembed_SOURCE_DIR}/python.exe" CACHE FILEPATH "" FORCE)
+
+# --- Python (build-time only; glslang's code generators need it) ---
+if(WIN32)
+    # Fetched automatically so the build machine needs nothing but VS, CMake, net.
+    FetchContent_Declare(pythonembed
+        URL https://www.python.org/ftp/python/3.12.7/python-3.12.7-embed-amd64.zip)
+    FetchContent_GetProperties(pythonembed)
+    if(NOT pythonembed_POPULATED)
+        FetchContent_Populate(pythonembed)
+    endif()
+    set(Python3_EXECUTABLE "${pythonembed_SOURCE_DIR}/python.exe" CACHE FILEPATH "" FORCE)
+    set(Python_EXECUTABLE  "${pythonembed_SOURCE_DIR}/python.exe" CACHE FILEPATH "" FORCE)
+else()
+    # Linux distributions ship python3; use it.
+    find_package(Python3 REQUIRED COMPONENTS Interpreter)
+endif()
 
 # --- glslang (host shader compiler; no SPIRV-Tools optimizer to keep it lean) ---
 set(ENABLE_OPT              OFF CACHE BOOL "" FORCE)
@@ -288,11 +332,16 @@ target_link_libraries(VkGigaTracer PRIVATE
     png_static
     zlibstatic
     jpegturbo
-    Dwmapi
-    Shcore
-    Shlwapi
-    Ole32
-    Shell32)
+    Threads::Threads)
+
+if(WIN32)
+    target_link_libraries(VkGigaTracer PRIVATE Ole32 Shell32)  # COM file dialogs
+else()
+    # volk loads libvulkan.so.1 with dlopen. Static libstdc++/libgcc keep the
+    # binary "copy and run" like the Windows exe (only glibc is required).
+    target_link_libraries(VkGigaTracer PRIVATE ${CMAKE_DL_LIBS})
+    target_link_options(VkGigaTracer PRIVATE -static-libstdc++ -static-libgcc)
+endif()
 
 set_target_properties(VkGigaTracer PROPERTIES OUTPUT_NAME "VkGigaTracer")
 
