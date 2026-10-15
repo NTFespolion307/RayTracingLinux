@@ -121,4 +121,11 @@ bool localTime(std::time_t t, std::tm& out) {
     return localtime_s(&out, &t) == 0;
 }
 
+std::filesystem::path systemUiFont(bool semibold) {
+    std::filesystem::path p = semibold ? L"C:\\Windows\\Fonts\\seguisb.ttf"   // Segoe UI Semibold
+                                       : L"C:\\Windows\\Fonts\\segoeui.ttf";
+    std::error_code ec;
+    return std::filesystem::is_regular_file(p, ec) ? p : std::filesystem::path();
+}
+
 } // namespace platform

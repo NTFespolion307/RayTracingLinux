@@ -62,3 +62,13 @@ TEST_CASE("localTime converts a known timestamp") {
     CHECK(tm.tm_year == 71);
     CHECK((tm.tm_mon == 5 || tm.tm_mon == 6));
 }
+
+TEST_CASE("systemUiFont returns an existing file or nothing") {
+    for (bool semibold : { false, true }) {
+        fs::path p = platform::systemUiFont(semibold);
+        if (!p.empty()) CHECK(fs::is_regular_file(p));
+    }
+#ifdef _WIN32
+    CHECK_FALSE(platform::systemUiFont(false).empty());   // Segoe UI ships with Windows
+#endif
+}

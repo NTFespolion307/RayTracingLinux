@@ -11,9 +11,11 @@ Windows machine whose only relevant software is a GPU driver.
 
 > **Linux port in progress.** The code base is being made to build and run
 > natively on Linux (Ubuntu 24.04, X11) while staying fully working on Windows.
-> The Windows-side groundwork is done: all OS-specific code now sits behind a
-> small platform layer, and a test suite locks in current behavior. Linux is not
-> usable yet. The plan, decisions and progress are tracked in
+> All OS-specific code now sits behind a small platform layer, and a test suite
+> locks in current behavior. The Linux build compiles, passes the full test
+> suite (including the rendered-image check) and opens the UI; native file
+> dialogs on Linux are still missing, so OBJ loading and saving only work on
+> Windows for now. The plan, decisions and progress are tracked in
 > [PORTING.md](PORTING.md).
 
 ---

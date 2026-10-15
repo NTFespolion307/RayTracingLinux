@@ -1,6 +1,13 @@
 # Porting VkGigaTracer to Linux
 
-Status: plan approved 2026-10-15. **Steps 1–8 done** (Windows-side refactor complete; Windows build verified, 41/41 tests). Next: step 9, the first Linux build in WSL.
+Status: plan approved 2026-10-15. **Steps 1–11 done.**
+- Windows: builds, 42/42 tests pass.
+- Linux (WSL distro `RayTracing`, Ubuntu 26.04, GCC 15): builds, 40/40 unit tests + 2/2 GPU tests pass under Xvfb with Mesa lavapipe, and the GUI starts. lavapipe exposes `VK_KHR_ray_query`, so the hardware ray-query backend was exercised for the first time; its image matches the Windows compute-path reference (MAE 0.000).
+- Still to do on Linux: native file dialogs and message boxes (step 12; they currently act as "cancelled" / print to stderr), then steps 13–17.
+
+Build host note: the WSL distro is Ubuntu **26.04**, not 24.04 as assumed in §0. A binary built there needs a glibc at least that new, so a release tarball meant for 24.04 users must be built on 24.04 (step 17).
+
+Run the Linux build and tests (inside WSL, distro `RayTracing`): see Appendix A; the build tree lives in `~/vkgt`, outside the Windows checkout.
 
 Extra fix found along the way: three pre-existing Vulkan validation errors (descriptor pool type, buffer usage, swapchain semaphores); the Debug build now runs with zero validation messages.
 
@@ -282,14 +289,17 @@ Added later, alongside the code they cover:
 
 ---
 
-## Appendix A. Linux (WSL Ubuntu 24.04) build environment (for step 9; not run yet)
+## Appendix A. Linux build and test (WSL distro `RayTracing`)
 
-1. In a Windows terminal, run `wsl -d Ubuntu-24.04`. Success: you get an Ubuntu shell prompt.
-2. In that shell, run `sudo apt update`. Success: ends with "Reading package lists... Done".
-3. Run `sudo apt install -y build-essential cmake ninja-build git python3 pkg-config`. Success: `cmake --version` prints 3.28 or newer.
-4. Run `sudo apt install -y libwayland-dev libxkbcommon-dev wayland-protocols xorg-dev`. Success: exits with no errors.
-5. Run `sudo apt install -y libvulkan1 mesa-vulkan-drivers vulkan-tools xvfb zenity`. Success: `vulkaninfo --summary` lists at least one device (llvmpipe/lavapipe or dozen).
-6. In the repo directory (`/mnt/c/Users/Admin/Documents/Code/RayTracing`), run `cmake -B build-linux -G Ninja -DCMAKE_BUILD_TYPE=Release`. Success: ends with "Build files have been written to".
-7. In the same directory, run `cmake --build build-linux`. Success: `build-linux/VkGigaTracer` exists.
+The distro already has the packages installed (`build-essential cmake
+ninja-build pkg-config xorg-dev libxkbcommon-dev libvulkan1 mesa-vulkan-drivers
+vulkan-tools xvfb zenity`). Run every command inside WSL.
 
-Why these packages: the Wayland and X11 dev headers are for GLFW (B5). Mesa and Xvfb are for the self-test (V6). zenity is for the recommended dialog backend (Q2). Building under `/mnt/c` is slow; cloning into the WSL filesystem (`~/src`) is noticeably faster.
+1. In a Windows terminal, open the distro: `wsl -d RayTracing`. Success: a `raytracing@…$` prompt.
+2. Configure (any directory): `cmake -S /mnt/c/Users/Admin/Documents/Code/RayTracing -B ~/vkgt/build -G Ninja -DCMAKE_BUILD_TYPE=Release -DFETCHCONTENT_BASE_DIR=$HOME/vkgt/deps`. Success: ends with `Build files have been written to: /home/raytracing/vkgt/build`.
+3. Build: `cmake --build ~/vkgt/build --parallel`. Success: `~/vkgt/build/VkGigaTracer` exists.
+4. Unit tests: `ctest --test-dir ~/vkgt/build -LE gpu --output-on-failure`. Success: `100% tests passed, 0 tests failed out of 40`.
+5. GPU tests on a virtual display: `xvfb-run -a ctest --test-dir ~/vkgt/build -L gpu --output-on-failure`. Success: `100% tests passed, 0 tests failed out of 2`.
+6. Run the app (opens on the Windows desktop through WSLg): `~/vkgt/build/VkGigaTracer`. Success: the VkGigaTracer window appears.
+
+Why this layout: the build tree and the dependency cache (`FETCHCONTENT_BASE_DIR`) live in the Linux filesystem, so they never collide with the Windows build's `build/` and `_deps_cache/`, and builds are much faster than under `/mnt/c`. The only Vulkan device in WSL is Mesa's lavapipe (CPU), so rendering is slower than on the GPU.

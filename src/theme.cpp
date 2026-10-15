@@ -111,9 +111,11 @@ void loadFonts(ImGuiIO& io, float dpiScale) {
     // Material "Google Sans"-style type: bundled Roboto (Regular for body,
     // Medium for headers) if present, otherwise Segoe UI - geometrically very
     // close - then the built-in bitmap font as a last resort so the app still
-    // runs everywhere.
-    const char* kSegoe     = "C:\\Windows\\Fonts\\segoeui.ttf";
-    const char* kSegoeSemi = "C:\\Windows\\Fonts\\seguisb.ttf";   // Segoe UI Semibold
+    // runs everywhere. (On Linux the system fallback is DejaVu/Liberation/Noto.)
+    const std::string sysRegular = platform::toUtf8(platform::systemUiFont(false));
+    const std::string sysSemi    = platform::toUtf8(platform::systemUiFont(true));
+    const char* kSegoe     = sysRegular.c_str();
+    const char* kSegoeSemi = sysSemi.c_str();
 
     gFontRegular = loadUiFont(io, "Roboto-Regular.ttf", kSegoe, 15.0f * dpiScale);
     if (!gFontRegular) {

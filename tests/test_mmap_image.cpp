@@ -7,6 +7,14 @@
 namespace fs = std::filesystem;
 using testutil::TempDir;
 
+// Windows keeps the scratch file visible until it is closed (delete-on-close);
+// Linux unlinks it right after creating it so a crash can never leak it.
+#ifdef _WIN32
+constexpr bool kScratchVisibleWhileOpen = true;
+#else
+constexpr bool kScratchVisibleWhileOpen = false;
+#endif
+
 TEST_CASE("requiredBytes handles gigapixel sizes without overflow") {
     CHECK(MmapImage::requiredBytes(76800, 43200) == 13271040000ull);
     CHECK(MmapImage::requiredBytes(1920, 1080) == 8294400ull);
@@ -40,7 +48,7 @@ TEST_CASE("scratch file lives in the folder while open and is deleted on destroy
     std::string name = p.filename().string();
     CHECK(name.rfind("VkGigaTracer_", 0) == 0);
     CHECK(p.extension() == ".scratch");
-    CHECK(fs::exists(p));
+    CHECK(fs::exists(p) == kScratchVisibleWhileOpen);
 
     img.destroy();
     CHECK_FALSE(img.valid());
@@ -56,7 +64,7 @@ TEST_CASE("destructor also deletes the scratch file") {
         MmapImage img;
         REQUIRE(img.create(dir.path(), 4, 4));
         p = img.path();
-        CHECK(fs::exists(p));
+        CHECK(fs::exists(p) == kScratchVisibleWhileOpen);
     }
     CHECK_FALSE(fs::exists(p));
 }
@@ -107,7 +115,7 @@ TEST_CASE("create with no folder uses the default scratch folder") {
     REQUIRE(img.create({}, 8, 8));
     fs::path p = img.path();
     CHECK(p.parent_path() == MmapImage::defaultFolder());
-    CHECK(fs::exists(p));
+    CHECK(fs::exists(p) == kScratchVisibleWhileOpen);
     img.destroy();
     CHECK_FALSE(fs::exists(p));
 }

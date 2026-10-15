@@ -43,6 +43,10 @@ FILE* openFile(const std::filesystem::path& path, const char* mode);
 // Thread-safe localtime(). Returns false on failure.
 bool localTime(std::time_t t, std::tm& out);
 
+// A system sans-serif TTF used when the bundled Roboto is missing
+// (Windows: Segoe UI; Linux: DejaVu/Liberation/Noto Sans). Empty if none found.
+std::filesystem::path systemUiFont(bool semibold);
+
 // UTF-8 <-> path conversions (lossless on every platform).
 inline std::string toUtf8(const std::filesystem::path& p) {
     std::u8string s = p.u8string();
