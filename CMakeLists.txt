@@ -105,6 +105,18 @@ if(NOT tinyobjloader_POPULATED)
     FetchContent_Populate(tinyobjloader)
 endif()
 
+# --- portable-file-dialogs (header only; Linux native dialogs via zenity/kdialog) ---
+# Windows keeps its own IFileDialog code (src/platform_win32.cpp).
+if(NOT WIN32)
+    FetchContent_Declare(pfd
+        GIT_REPOSITORY https://github.com/samhocevar/portable-file-dialogs.git
+        GIT_TAG        c12ea8c9a727f5320a2b4570aee863bbede2a204)
+    FetchContent_GetProperties(pfd)
+    if(NOT pfd_POPULATED)
+        FetchContent_Populate(pfd)
+    endif()
+endif()
+
 # --- zlib (static) ---
 set(ZLIB_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(zlib
@@ -347,6 +359,9 @@ target_include_directories(VkGigaTracer PRIVATE
     ${vma_SOURCE_DIR}/include
     ${tinyobjloader_SOURCE_DIR}
     ${ZLIB_INCLUDE_DIRS})
+if(NOT WIN32)
+    target_include_directories(VkGigaTracer PRIVATE ${pfd_SOURCE_DIR})
+endif()
 
 target_link_libraries(VkGigaTracer PRIVATE
     volk
@@ -432,6 +447,7 @@ if(VKGT_BUILD_TESTS)
         target_link_libraries(VkGigaTracerTests PRIVATE Ole32 Shell32)
     else()
         target_sources(VkGigaTracerTests PRIVATE src/platform_posix.cpp src/mmap_image_posix.cpp)
+        target_include_directories(VkGigaTracerTests PRIVATE ${pfd_SOURCE_DIR})
     endif()
 
     include(${doctest_SOURCE_DIR}/scripts/cmake/doctest.cmake)

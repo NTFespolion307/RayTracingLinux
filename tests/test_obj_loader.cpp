@@ -123,3 +123,13 @@ TEST_CASE("OBJ and MTL load from a non-ASCII directory") {
     ObjLoadResult r = loadObj((dir / "materials.obj"));
     checkMaterialsFixture(r);
 }
+
+TEST_CASE("mtllib with backslashes and wrong case is still found") {
+    ObjLoadResult r = loadObj(dataFile("mtlcase") / "scene.obj");
+    REQUIRE(r.ok);
+    REQUIRE(r.scene.materials.size() == 2);   // "glow" + default
+    CHECK((uint32_t)r.scene.materials[0].params.x == MAT_EMISSIVE);
+    REQUIRE(r.scene.triangles.size() == 1);
+    CHECK(r.scene.triangles[0].material == 0);
+    CHECK(r.scene.lights.size() == 1);
+}

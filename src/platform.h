@@ -26,6 +26,10 @@ struct FileFilter {
     const char* pattern;       // e.g. "*.png"
 };
 
+// Whether native dialogs can be shown (Linux needs zenity, kdialog, matedialog
+// or qarma installed). When false, the UI asks for a path itself.
+bool nativeDialogsAvailable();
+
 // Native dialogs. Each returns an empty path when the user cancels.
 std::filesystem::path openFileDialog(const std::vector<FileFilter>& filters);
 std::filesystem::path saveFileDialog(const FileFilter& filter, const char* defaultExtension);
@@ -54,6 +58,12 @@ inline std::string toUtf8(const std::filesystem::path& p) {
 }
 inline std::filesystem::path fromUtf8(const std::string& s) {
     return std::filesystem::path(std::u8string(s.begin(), s.end()));
+}
+
+// Appends ".ext" when `p` has no extension (save dialogs that don't add one).
+inline std::filesystem::path withDefaultExtension(std::filesystem::path p, const char* ext) {
+    if (!p.empty() && !p.has_extension() && ext && *ext) p += std::string(".") + ext;
+    return p;
 }
 
 } // namespace platform

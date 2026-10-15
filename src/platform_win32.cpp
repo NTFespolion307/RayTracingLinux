@@ -54,6 +54,8 @@ void showMessage(MessageKind kind, const char* text, const char* title) {
     MessageBoxW(nullptr, utf8ToWide(text).c_str(), utf8ToWide(title).c_str(), MB_OK | icon);
 }
 
+bool nativeDialogsAvailable() { return true; }
+
 std::filesystem::path openFileDialog(const std::vector<FileFilter>& filters) {
     IFileOpenDialog* dlg = nullptr;
     if (FAILED(CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER,

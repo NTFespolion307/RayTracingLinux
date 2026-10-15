@@ -45,8 +45,17 @@ private:
 
     void loadDemoScene();
     void loadObjDialog();
+    void loadObjFromPath(const std::filesystem::path& path);
     void openSaveDialog();
     void startSave(SaveFormat fmt);
+    void beginSave(SaveFormat fmt, const std::filesystem::path& path);
+    void chooseScratchFolder();
+
+    // Fallback when no native dialog is available (Linux without zenity/kdialog):
+    // an in-app modal where the user types a path.
+    enum class PathPurpose { OpenObj, SaveImage, ScratchFolder };
+    void openPathPrompt(PathPurpose purpose, SaveFormat fmt = SaveFormat::PNG);
+    void drawPathPrompt();
     void startFinalRender();
     void handlePreviewCamera();
 
@@ -104,4 +113,10 @@ private:
     bool         saveModalOpen_ = false;
     std::filesystem::path pendingSavePath_;
     SaveFormat   pendingSaveFormat_ = SaveFormat::PNG;
+
+    // Path prompt state
+    bool         pathPromptRequested_ = false;
+    PathPurpose  pathPurpose_ = PathPurpose::OpenObj;
+    SaveFormat   pathPromptFormat_ = SaveFormat::PNG;
+    char         pathBuf_[1024] = {};
 };

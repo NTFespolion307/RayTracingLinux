@@ -13,6 +13,44 @@
 
 namespace {
 
+std::string asciiLower(std::string s) {
+    for (char& c : s) if (c >= 'A' && c <= 'Z') c = char(c - 'A' + 'a');
+    return s;
+}
+
+// Resolves a file name referenced from an OBJ (e.g. "Materials\Scene.MTL")
+// relative to `base`. OBJs written on Windows often use backslashes and
+// mismatched case, which case-sensitive file systems (Linux) don't forgive:
+// treat '\' as a separator, and if the exact path is missing, match each
+// path component case-insensitively. Returns the exact path if nothing matches.
+std::filesystem::path resolveReferenced(const std::filesystem::path& base, std::string name) {
+    namespace fs = std::filesystem;
+    std::replace(name.begin(), name.end(), '\\', '/');
+    const fs::path rel = platform::fromUtf8(name);
+    const fs::path exact = base / rel;
+    std::error_code ec;
+    if (fs::exists(exact, ec)) return exact;
+
+    fs::path cur = base;
+    for (const fs::path& part : rel) {
+        fs::path next = cur / part;
+        if (!fs::exists(next, ec)) {
+            const std::string want = asciiLower(platform::toUtf8(part));
+            bool found = false;
+            for (const auto& entry : fs::directory_iterator(cur.empty() ? fs::path(".") : cur, ec)) {
+                if (asciiLower(platform::toUtf8(entry.path().filename())) == want) {
+                    next = cur / entry.path().filename();
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) return exact;
+        }
+        cur = next;
+    }
+    return cur;
+}
+
 // MaterialReader that opens .mtl files relative to the OBJ's directory via
 // std::filesystem paths (non-ASCII safe on every platform). MTL names in the
 // OBJ are UTF-8.
@@ -23,7 +61,7 @@ public:
                     std::vector<tinyobj::material_t>* materials,
                     std::map<std::string, int>* matMap,
                     std::string* err) override {
-        std::filesystem::path full = baseDir_ / platform::fromUtf8(matId);
+        std::filesystem::path full = resolveReferenced(baseDir_, matId);
         std::ifstream stream(full, std::ios::binary);
         if (!stream) {
             if (err) *err += "Could not open material file: " + matId + "\n";

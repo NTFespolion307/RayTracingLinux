@@ -72,3 +72,17 @@ TEST_CASE("systemUiFont returns an existing file or nothing") {
     CHECK_FALSE(platform::systemUiFont(false).empty());   // Segoe UI ships with Windows
 #endif
 }
+
+TEST_CASE("withDefaultExtension only adds an extension when there is none") {
+    CHECK(platform::withDefaultExtension("out", "png") == fs::path("out.png"));
+    CHECK(platform::withDefaultExtension("dir/out", "ppm") == fs::path("dir/out.ppm"));
+    CHECK(platform::withDefaultExtension("out.jpg", "png") == fs::path("out.jpg"));
+    CHECK(platform::withDefaultExtension(fs::path(), "png").empty());
+}
+
+TEST_CASE("nativeDialogsAvailable is stable across calls") {
+    CHECK(platform::nativeDialogsAvailable() == platform::nativeDialogsAvailable());
+#ifdef _WIN32
+    CHECK(platform::nativeDialogsAvailable());
+#endif
+}

@@ -187,7 +187,14 @@ bool App::createSwapchain() {
     ci.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
     ci.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
     ci.preTransform = caps.currentTransform;
+    // Opaque is preferred; some Linux compositors only offer the others.
     ci.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+    for (VkCompositeAlphaFlagBitsKHR a : { VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
+                                           VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR,
+                                           VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR,
+                                           VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR }) {
+        if (caps.supportedCompositeAlpha & a) { ci.compositeAlpha = a; break; }
+    }
     ci.presentMode = VK_PRESENT_MODE_FIFO_KHR;
     ci.clipped = VK_TRUE;
     ci.oldSwapchain = VK_NULL_HANDLE;
@@ -313,9 +320,13 @@ void App::loadDemoScene() {
 }
 
 void App::loadObjDialog() {
+    if (!platform::nativeDialogsAvailable()) { openPathPrompt(PathPurpose::OpenObj); return; }
     std::filesystem::path path = platform::openFileDialog({ { "Wavefront OBJ", "*.obj" },
                                                    { "All files", "*.*" } });
-    if (path.empty()) return;
+    if (!path.empty()) loadObjFromPath(path);
+}
+
+void App::loadObjFromPath(const std::filesystem::path& path) {
     ObjLoadResult res = loadObj(path);
     if (!res.ok) {
         statusLine_ = "OBJ load failed: " + res.message;
@@ -345,7 +356,7 @@ void App::startFinalRender() {
         char buf[256];
         std::snprintf(buf, sizeof(buf),
             "This render needs about %.1f GB of free scratch space.\n"
-            "Free up space or choose a different scratch drive in Advanced settings.", gb);
+            "Free up space or choose a different scratch folder under Performance.", gb);
         messageBox(buf, "VkGigaTracer - Disk Space", MsgWarning);
         statusLine_ = "Render not started: insufficient scratch disk space.";
         return;
@@ -358,16 +369,29 @@ void App::startFinalRender() {
 // ---------------------------------------------------------------------------
 // Save
 // ---------------------------------------------------------------------------
-void App::startSave(SaveFormat fmt) {
-    const char* ext; const char* desc; const char* pat;
+namespace {
+const char* saveExtension(SaveFormat fmt) {
     switch (fmt) {
-        case SaveFormat::PNG:  ext = "png"; desc = "PNG image"; pat = "*.png"; break;
-        case SaveFormat::JPEG: ext = "jpg"; desc = "JPEG image"; pat = "*.jpg"; break;
-        default:               ext = "ppm"; desc = "Portable Pixmap"; pat = "*.ppm"; break;
+        case SaveFormat::PNG:  return "png";
+        case SaveFormat::JPEG: return "jpg";
+        default:               return "ppm";
     }
-    std::filesystem::path path = platform::saveFileDialog({ desc, pat }, ext);
-    if (path.empty()) return;
+}
+} // namespace
 
+void App::startSave(SaveFormat fmt) {
+    if (!platform::nativeDialogsAvailable()) { openPathPrompt(PathPurpose::SaveImage, fmt); return; }
+    const char* desc; const char* pat;
+    switch (fmt) {
+        case SaveFormat::PNG:  desc = "PNG image"; pat = "*.png"; break;
+        case SaveFormat::JPEG: desc = "JPEG image"; pat = "*.jpg"; break;
+        default:               desc = "Portable Pixmap"; pat = "*.ppm"; break;
+    }
+    std::filesystem::path path = platform::saveFileDialog({ desc, pat }, saveExtension(fmt));
+    if (!path.empty()) beginSave(fmt, path);
+}
+
+void App::beginSave(SaveFormat fmt, const std::filesystem::path& path) {
     if (saveThread_.joinable()) saveThread_.join();
     saveProgress_.progress.store(0.0f);
     saveProgress_.cancel.store(false);
@@ -495,10 +519,8 @@ void App::drawSidebar() {
         ImGui::PushStyleColor(ImGuiCol_Text, theme::colors().textMuted);
         ImGui::TextWrapped("Scratch: %s", sf.c_str());
         ImGui::PopStyleColor();
-        if (theme::SecondaryButton("Choose scratch folder...", ImVec2(-FLT_MIN, 0))) {
-            std::filesystem::path f = platform::pickFolderDialog();
-            if (!f.empty()) settings_.scratchFolder = f;
-        }
+        if (theme::SecondaryButton("Choose scratch folder...", ImVec2(-FLT_MIN, 0)))
+            chooseScratchFolder();
     }
 
     ImGui::EndChild();
@@ -737,6 +759,63 @@ void App::drawSaveModal() {
     }
 }
 
+void App::chooseScratchFolder() {
+    if (!platform::nativeDialogsAvailable()) { openPathPrompt(PathPurpose::ScratchFolder); return; }
+    std::filesystem::path f = platform::pickFolderDialog();
+    if (!f.empty()) settings_.scratchFolder = f;
+}
+
+void App::openPathPrompt(PathPurpose purpose, SaveFormat fmt) {
+    pathPurpose_ = purpose;
+    pathPromptFormat_ = fmt;
+    pathBuf_[0] = '\0';
+    pathPromptRequested_ = true;
+}
+
+void App::drawPathPrompt() {
+    if (pathPromptRequested_) { ImGui::OpenPopup("Enter a path"); pathPromptRequested_ = false; }
+    if (!ImGui::BeginPopupModal("Enter a path", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) return;
+
+    const char* what = "OBJ file to open";
+    if (pathPurpose_ == PathPurpose::SaveImage) what = "File to save the image as";
+    else if (pathPurpose_ == PathPurpose::ScratchFolder) what = "Scratch folder";
+    theme::SectionHeader(what);
+    ImGui::PushStyleColor(ImGuiCol_Text, theme::colors().textMuted);
+    ImGui::PushTextWrapPos(theme::scale(440));
+    ImGui::TextUnformatted("No file dialog program (zenity or kdialog) was found, "
+                           "so type the full path instead.");
+    ImGui::PopTextWrapPos();
+    ImGui::PopStyleColor();
+
+    if (ImGui::IsWindowAppearing()) ImGui::SetKeyboardFocusHere();
+    ImGui::SetNextItemWidth(theme::scale(440));
+    bool enter = ImGui::InputText("##path", pathBuf_, sizeof(pathBuf_),
+                                  ImGuiInputTextFlags_EnterReturnsTrue);
+    bool ok = theme::PrimaryButton("OK") || enter;
+    ImGui::SameLine();
+    bool cancel = theme::SecondaryButton("Cancel");
+
+    if (ok && pathBuf_[0]) {
+        ImGui::CloseCurrentPopup();
+        std::filesystem::path p = platform::fromUtf8(pathBuf_);
+        switch (pathPurpose_) {
+            case PathPurpose::OpenObj:
+                loadObjFromPath(p);
+                break;
+            case PathPurpose::SaveImage:
+                beginSave(pathPromptFormat_,
+                          platform::withDefaultExtension(p, saveExtension(pathPromptFormat_)));
+                break;
+            case PathPurpose::ScratchFolder:
+                settings_.scratchFolder = p;
+                break;
+        }
+    } else if (cancel) {
+        ImGui::CloseCurrentPopup();
+    }
+    ImGui::EndPopup();
+}
+
 void App::buildUI() {
     // Detect when a final render stops so the status line doesn't get stuck on
     // "Rendering...". A full tile count means it completed; otherwise it was
@@ -786,6 +865,7 @@ void App::buildUI() {
 
     ImGui::Spacing();
     drawStatusBar();
+    drawPathPrompt();
 
     ImGui::End();
     ImGui::PopStyleVar();
